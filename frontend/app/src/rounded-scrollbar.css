@@ -1,0 +1,33 @@
+/* Rounded scrollbars for all browsers */
+
+/* Webkit browsers (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: #e0e7ff;
+  border-radius: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: #b0b6c6;
+  border-radius: 12px;
+  border: 3px solid #e0e7ff;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a0a6b6;
+}
+::-webkit-scrollbar-corner {
+  background: #e0e7ff;
+  border-radius: 12px;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b0b6c6 #e0e7ff;
+}
+
+/* Optional: for more control in Firefox */
+html, body, * {
+  scrollbar-width: thin;
+  scrollbar-color: #b0b6c6 #e0e7ff;
+}

@@ -3,8 +3,8 @@ import Login from './pages/auth/Login.jsx'
 import SignUp from './pages/auth/SignUp.jsx'
 import Profile from './pages/Profile.jsx'
 
-function App() {
 
+function App() {
   return (
     <div className="app-container">
       <Profile />
@@ -12,4 +12,4 @@ function App() {
   )
 }
 
-export default App
+export default App;
