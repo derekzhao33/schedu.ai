@@ -33,9 +33,9 @@ export default function DashboardPreview() {
       <main className="flex-1 p-8 space-y-8">
         {/* Header */}
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#355C7D] to-[#725A7A] bg-clip-text text-transparent">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
           <button
-            className="px-6 py-3 bg-gradient-to-r from-[#FF7582] to-[#C56C86] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition"
+            className="px-6 py-3 bg-pink-500/20 text-pink-700 font-semibold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition backdrop-blur-md border border-pink-500/30"
             onClick={openAddTaskModal}
           >
             + Add Task
@@ -49,47 +49,46 @@ export default function DashboardPreview() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="p-6 rounded-3xl shadow-lg hover:scale-105 transition cursor-pointer bg-gradient-to-br from-[#FF9CA5] to-[#FF7582]">
-            <h2 className="font-semibold text-white/90">Today</h2>
-            <p className="text-4xl font-bold mt-2 text-white">{todaysTasks.length}</p>
-            <p className="text-sm text-white/80">Tasks Remaining</p>
+          <div className="p-6 rounded-3xl shadow hover:scale-105 transition cursor-pointer bg-white/70 backdrop-blur-sm border-l-2 border-l-pink-500 shadow-pink-500/30">
+            <h2 className="font-semibold text-pink-400">Today</h2>
+            <p className={`text-4xl font-bold mt-2 text-pink-600 ${todaysTasks.length > 0 ? 'drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]' : ''}`}>
+              {todaysTasks.length}
+            </p>
+            <p className="text-sm text-pink-300">Tasks Remaining</p>
           </div>
-          <div className="p-6 rounded-3xl shadow-lg hover:scale-105 transition cursor-pointer bg-gradient-to-br from-[#725A7A] to-[#C56C86]">
-            <h2 className="font-semibold text-white/90">This Week</h2>
-            <p className="text-4xl font-bold mt-2 text-white">{weekTasks.length}</p>
-            <p className="text-sm text-white/80">Total Tasks</p>
+          <div className="p-6 rounded-3xl shadow hover:scale-105 transition cursor-pointer bg-white/70 backdrop-blur-sm border-l-2 border-l-purple-500 shadow-purple-500/30">
+            <h2 className="font-semibold text-purple-400">This Week</h2>
+            <p className={`text-4xl font-bold mt-2 text-purple-600 ${weekTasks.length > 3 ? 'drop-shadow-[0_0_12px_rgba(168,85,247,0.6)]' : weekTasks.length > 0 ? 'drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]' : ''}`}>
+              {weekTasks.length}
+            </p>
+            <p className="text-sm text-purple-300">Total Tasks</p>
           </div>
-          <div className="p-6 rounded-3xl shadow-lg hover:scale-105 transition cursor-pointer bg-gradient-to-br from-[#355C7D] to-[#6D8FA8]">
-            <h2 className="font-semibold text-white/90">This Month</h2>
-            <p className="text-4xl font-bold mt-2 text-white">{monthTasks.length}</p>
-            <p className="text-sm text-white/80">Planned Tasks</p>
+          <div className="p-6 rounded-3xl shadow hover:scale-105 transition cursor-pointer bg-white/70 backdrop-blur-sm border-l-2 border-l-blue-500 shadow-blue-500/30">
+            <h2 className="font-semibold text-blue-400">This Month</h2>
+            <p className={`text-4xl font-bold mt-2 text-blue-600 ${monthTasks.length > 5 ? 'drop-shadow-[0_0_16px_rgba(59,130,246,0.7)]' : monthTasks.length > 3 ? 'drop-shadow-[0_0_12px_rgba(59,130,246,0.5)]' : monthTasks.length > 0 ? 'drop-shadow-[0_0_8px_rgba(59,130,246,0.3)]' : ''}`}>
+              {monthTasks.length}
+            </p>
+            <p className="text-sm text-blue-300">Planned Tasks</p>
           </div>
         </motion.section>
 
         {/* Upcoming Deadlines */}
-        <section className="p-8 rounded-3xl shadow-xl cursor-pointer hover:scale-105 transition bg-gradient-to-br from-[#C56C86]/10 to-[#FF9CA5]/10 border-2 border-[#C56C86]/20">
-          <h2 className="text-2xl font-bold mb-4 text-foreground">Upcoming Deadlines</h2>
+        <section className="p-8 rounded-3xl shadow-xl hover:scale-105 transition bg-pink-50/60 backdrop-blur-md border border-pink-200/40">
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">Upcoming Deadlines</h2>
           <div className="space-y-3">
             {upcomingDeadlines.length > 0 ? (
               upcomingDeadlines.map((task, index) => {
-                const colors = [
-                  'bg-gradient-to-r from-[#FF7582] to-[#FF9CA5]',
-                  'bg-gradient-to-r from-[#725A7A] to-[#C56C86]',
-                  'bg-gradient-to-r from-[#355C7D] to-[#6D8FA8]',
-                  'bg-gradient-to-r from-[#C56C86] to-[#FF7582]',
-                  'bg-gradient-to-r from-[#6D8FA8] to-[#725A7A]'
-                ];
                 const borderColors = [
-                  'border-l-[#FF7582]',
-                  'border-l-[#725A7A]',
-                  'border-l-[#355C7D]',
-                  'border-l-[#C56C86]',
-                  'border-l-[#6D8FA8]'
+                  'border-l-pink-500',
+                  'border-l-purple-500',
+                  'border-l-blue-500',
+                  'border-l-indigo-500',
+                  'border-l-cyan-500'
                 ];
                 return (
                   <div
                     key={index}
-                    className={`p-4 rounded-xl flex justify-between items-center bg-card border-l-4 ${borderColors[index % borderColors.length]} hover:shadow-lg transition`}
+                    className={`p-4 rounded-xl flex justify-between items-center bg-white/60 backdrop-blur-sm border-l-4 ${borderColors[index % borderColors.length]} hover:shadow-lg transition`}
                   >
                     <div>
                       <p className="font-semibold text-foreground">
@@ -108,10 +107,10 @@ export default function DashboardPreview() {
                         })}
                       </p>
                       {task.priority && (
-                        <span className={`text-xs px-3 py-1 rounded-full text-white font-semibold ${
-                          task.priority === 'high' ? 'bg-[#EF4444]' :
-                          task.priority === 'medium' ? 'bg-[#F59E0B]' :
-                          'bg-[#10B981]'
+                        <span className={`text-xs px-3 py-1 rounded-full font-semibold backdrop-blur-md ${
+                          task.priority === 'high' ? 'bg-red-500/20 text-red-700 border border-red-500/30 shadow-lg shadow-red-500/20' :
+                          task.priority === 'medium' ? 'bg-amber-500/20 text-amber-700 border border-amber-500/30 shadow-lg shadow-amber-500/20' :
+                          'bg-green-500/20 text-green-700 border border-green-500/30 shadow-lg shadow-green-500/20'
                         }`}>
                           {task.priority}
                         </span>
