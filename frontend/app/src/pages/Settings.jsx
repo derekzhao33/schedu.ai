@@ -1,12 +1,12 @@
-import React, { useState } from "react";
+import React from "react";
 import { useThemeSettings } from "../context/ThemeContext";
 import { useSchedule } from "../context/ScheduleContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { Separator } from "../components/ui/separator";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
+import { Separator } from "../components/ui/separator";
+import Sidebar from "../components/Sidebar";
 import {
   Select,
   SelectContent,
@@ -26,15 +26,6 @@ import {
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
 import {
-  Calendar,
-  LayoutDashboard,
-  ListTodo,
-  Bot,
-  BarChart3,
-  Settings as SettingsIcon,
-  User,
-  ChevronLeft,
-  ChevronRight,
   Palette,
   Bell,
   CalendarDays,
@@ -43,7 +34,6 @@ import {
 
 
 export default function Settings() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
 
   const {
@@ -60,7 +50,6 @@ export default function Settings() {
 
   const { setTasks, setEvents } = useSchedule();
 
-
   const resetAllData = () => {
     setTasks([]);
     setEvents([]);
@@ -68,90 +57,9 @@ export default function Settings() {
     localStorage.removeItem("events");
   };
 
-
-  const NavLink = ({ icon: Icon, children, active }) => (
-    <div
-      className={`text-gray-300 hover:text-white hover:bg-white/10 transition cursor-pointer rounded-lg p-3 flex items-center gap-3 ${
-        active ? "bg-white/10 text-white" : ""
-      }`}
-    >
-      <Icon className="h-5 w-5 flex-shrink-0" />
-      {!sidebarCollapsed && <span>{children}</span>}
-    </div>
-  );
-
-
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: "#E0E7FF" }}>
-      {/* Sidebar */}
-      <aside
-        className={`${
-          sidebarCollapsed ? "w-20" : "w-64"
-        } p-6 shadow-xl rounded-r-3xl hidden md:flex flex-col transition-all duration-300`}
-        style={{ backgroundColor: "#181D27" }}
-      >
-        {/* Header with collapse button */}
-        <div className="flex items-center justify-between mb-6">
-          {!sidebarCollapsed && <h2 className="text-xl font-bold text-white">FlowScheduler</h2>}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="text-gray-300 hover:text-white hover:bg-white/10"
-          >
-            {sidebarCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
-          </Button>
-        </div>
-
-
-        {/* Navigation */}
-        <nav className="space-y-2 flex-1">
-          <NavLink icon={LayoutDashboard}>Dashboard</NavLink>
-          <NavLink icon={Calendar}>Calendar</NavLink>
-          <NavLink icon={ListTodo}>Tasks</NavLink>
-          <NavLink icon={Bot}>Assistant</NavLink>
-          <NavLink icon={BarChart3}>Stats</NavLink>
-        </nav>
-
-
-        {/* Bottom Section - User Profile and Settings */}
-        <div className="space-y-3 mt-6">
-          <Separator className="bg-gray-600" />
-
-
-          {/* Settings Button */}
-          <Button
-            variant="ghost"
-            className={`w-full ${
-              sidebarCollapsed ? "justify-center" : "justify-start"
-            } text-white bg-white/10 hover:text-white hover:bg-white/20 gap-3`}
-          >
-            <SettingsIcon className="h-5 w-5 flex-shrink-0" />
-            {!sidebarCollapsed && <span>Settings</span>}
-          </Button>
-
-
-          {/* User Profile */}
-          <div
-            className={`flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 cursor-pointer transition ${
-              sidebarCollapsed ? "justify-center" : ""
-            }`}
-          >
-            <Avatar className="h-8 w-8 flex-shrink-0">
-              <AvatarImage src="" alt="User" />
-              <AvatarFallback style={{ backgroundColor: "#E0E7FF", color: "#181D27" }}>
-                <User className="h-4 w-4" />
-              </AvatarFallback>
-            </Avatar>
-            {!sidebarCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">John Doe</p>
-                <p className="text-xs text-gray-400 truncate">john@example.com</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </aside>
+    <div className={`flex min-h-screen ${theme === 'dark' ? 'dark' : ''}`} style={{ backgroundColor: "#F7F8FC" }}>
+      <Sidebar />
 
 
       {/* Main content */}

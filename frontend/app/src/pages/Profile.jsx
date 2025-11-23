@@ -1,13 +1,27 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { Camera, Mail, User, Lock, Link2 } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Separator } from '../components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
+import { useThemeSettings } from '../context/ThemeContext';
+import Sidebar from '../components/Sidebar';
+import { Camera, Mail, User, Lock, Link2, Crown, Calendar } from 'lucide-react';
 
 const Profile = () => {
+  const { theme } = useThemeSettings();
+
   // Profile state
   const [firstName, setFirstName] = useState('John');
   const [lastName, setLastName] = useState('Doe');
@@ -19,6 +33,11 @@ const Profile = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+  // Subscription state
+  const [subscriptionType, setSubscriptionType] = useState('free-trial'); // 'free-trial' or 'premium'
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState(14);
+  const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
 
   const handleSaveProfile = () => {
     // Save profile functionality will go here
@@ -48,33 +67,22 @@ const Profile = () => {
     // Connect Outlook account
   };
 
-  const NavLink = ({ children, active = false }) => (
-    <div className={`text-gray-300 hover:text-white transition cursor-pointer py-2 px-4 rounded-lg ${active ? 'bg-gray-700' : ''}`}>
-      {children}
-    </div>
-  );
+  const handleSubscribe = () => {
+    // Subscription purchase logic will go here
+    console.log('Subscribe clicked');
+    setShowSubscriptionDialog(false);
+  };
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: '#E0E7FF' }}>
-      {/* Sidebar */}
-      <aside className="w-64 p-6 shadow-xl rounded-r-3xl hidden md:block" style={{ backgroundColor: '#181D27' }}>
-        <h2 className="text-xl font-bold mb-6 text-white">Schedu.ai</h2>
-        <ul className="space-y-2">
-          <li><NavLink>Dashboard</NavLink></li>
-          <li><NavLink>Calendar</NavLink></li>
-          <li><NavLink>Tasks</NavLink></li>
-          <li><NavLink>Assistant</NavLink></li>
-          <li><NavLink>Stats</NavLink></li>
-          <li><NavLink active>Profile</NavLink></li>
-        </ul>
-      </aside>
+    <div className={`flex min-h-screen ${theme === 'dark' ? 'dark' : ''}`} style={{ backgroundColor: '#F7F8FC' }}>
+      <Sidebar />
 
       {/* Main content */}
       <main className="flex-1 p-8 space-y-8 w-full">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold" style={{ color: '#181D27' }}>Profile Settings</h1>
-          <p className="text-gray-600 mt-2">Manage your account information and preferences</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#355C7D] to-[#725A7A] bg-clip-text text-transparent">Profile Settings</h1>
+          <p className="text-muted-foreground mt-2">Manage your account information and preferences</p>
         </div>
 
         {/* Profile Information Card */}
@@ -84,30 +92,81 @@ const Profile = () => {
             <CardDescription>Update your personal details and profile picture</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Profile Picture */}
-            <div className="flex items-center gap-6">
-              <Avatar className="h-24 w-24">
-                <AvatarImage src={profileImage} />
-                <AvatarFallback className="text-2xl" style={{ backgroundColor: '#181D27', color: 'white' }}>
-                  {firstName[0]}{lastName[0]}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <Label htmlFor="picture" className="cursor-pointer">
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 transition">
-                    <Camera className="h-5 w-5 text-gray-600" />
-                    <span className="text-sm text-gray-700">Upload Photo</span>
-                  </div>
-                  <Input
-                    id="picture"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                </Label>
-                <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF. Max 5MB.</p>
+            {/* Profile Picture and Subscription Card */}
+            <div className="flex items-start justify-between gap-6">
+              {/* Left: Profile Picture */}
+              <div className="flex items-center gap-6">
+                <Avatar className="h-24 w-24">
+                  <AvatarImage src={profileImage} />
+                  <AvatarFallback className="text-2xl bg-gradient-to-r from-[#FF9CA5] to-[#C56C86] text-white">
+                    {firstName[0]}{lastName[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <Label htmlFor="picture" className="cursor-pointer">
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 transition">
+                      <Camera className="h-5 w-5 text-gray-600" />
+                      <span className="text-sm text-gray-700">Upload Photo</span>
+                    </div>
+                    <Input
+                      id="picture"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                  </Label>
+                  <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF. Max 5MB.</p>
+                </div>
               </div>
+
+              {/* Right: Subscription Card */}
+              <Card 
+                className="border-2 cursor-pointer hover:shadow-md transition-shadow max-w-xs"
+                style={{ 
+                  borderColor: subscriptionType === 'free-trial' ? '#FF7582' : '#355C7D',
+                  backgroundColor: subscriptionType === 'free-trial' ? '#FFF5F6' : '#F0F4FF'
+                }}
+                onClick={() => setShowSubscriptionDialog(true)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    {subscriptionType === 'free-trial' ? (
+                      <Calendar className="h-5 w-5" style={{ color: '#FF7582' }} />
+                    ) : (
+                      <Crown className="h-5 w-5" style={{ color: '#355C7D' }} />
+                    )}
+                    <div>
+                      <p className="font-semibold text-sm">
+                        {subscriptionType === 'free-trial' ? 'Free Trial' : 'Premium Subscription'}
+                      </p>
+                      {subscriptionType === 'free-trial' && (
+                        <p className="text-xs text-gray-600">
+                          {trialDaysRemaining} {trialDaysRemaining === 1 ? 'day' : 'days'} remaining
+                        </p>
+                      )}
+                      {subscriptionType === 'premium' && (
+                        <p className="text-xs text-gray-600">Active</p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full mt-2"
+                    style={{ 
+                      background: subscriptionType === 'free-trial' 
+                        ? 'linear-gradient(to right, #FF7582, #C56C86)' 
+                        : 'linear-gradient(to right, #355C7D, #725A7A)'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSubscriptionDialog(true);
+                    }}
+                  >
+                    {subscriptionType === 'free-trial' ? 'Upgrade Now' : 'Manage Subscription'}
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
 
             <Separator />
@@ -169,7 +228,7 @@ const Profile = () => {
             <div className="flex justify-end pt-4">
               <Button
                 onClick={handleSaveProfile}
-                className="bg-[#181D27] hover:bg-[#2a3142] text-white font-medium cursor-pointer"
+                className="bg-gradient-to-r from-[#FF7582] to-[#C56C86] hover:opacity-90 text-white font-medium cursor-pointer"
               >
                 Save Changes
               </Button>
@@ -233,7 +292,7 @@ const Profile = () => {
             <div className="flex justify-end pt-4">
               <Button
                 onClick={handleChangePassword}
-                className="bg-[#181D27] hover:bg-[#2a3142] text-white font-medium cursor-pointer"
+                className="bg-gradient-to-r from-[#355C7D] to-[#725A7A] hover:opacity-90 text-white font-medium cursor-pointer"
               >
                 Update Password
               </Button>
@@ -293,6 +352,59 @@ const Profile = () => {
           </CardContent>
         </Card>
       </main>
+
+      {/* Subscription Dialog */}
+      <AlertDialog open={showSubscriptionDialog} onOpenChange={setShowSubscriptionDialog}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl flex items-center gap-2">
+              <Crown className="h-6 w-6" style={{ color: '#FF7582' }} />
+              Upgrade to Premium
+            </AlertDialogTitle>
+            <AlertDialogDescription className="pt-4">
+              Get unlimited access to all features with our annual subscription.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="py-6">
+            <div className="border-2 rounded-lg p-6 text-center" style={{ borderColor: '#FF7582', backgroundColor: '#FFF5F6' }}>
+              <p className="text-sm text-gray-600 mb-2">Annual Plan</p>
+              <div className="flex items-baseline justify-center gap-1 mb-3">
+                <span className="text-4xl font-bold" style={{ color: '#355C7D' }}>$20</span>
+                <span className="text-gray-600">/year</span>
+              </div>
+              <ul className="text-sm text-left space-y-2 text-gray-700">
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Unlimited calendar events
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  AI-powered scheduling assistant
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Priority support
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Advanced integrations
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleSubscribe}
+              className="bg-gradient-to-r from-[#FF7582] to-[#C56C86] hover:opacity-90 text-white"
+            >
+              Subscribe Now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
