@@ -18,6 +18,8 @@ import Tasks from './pages/Tasks.jsx'
 import Settings from './pages/Settings.jsx'
 // @ts-ignore
 import Profile from './pages/Profile.jsx'
+// @ts-ignore
+import Assistant from './pages/Assistant.jsx'
 import Confetti from 'react-confetti'
 import { useEffect, useState } from 'react'
 
@@ -56,6 +58,7 @@ function AppContent() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/calendar" element={<Calender />} />
             <Route path="/tasks" element={<Tasks />} />
+            <Route path="/assistant" element={<Assistant />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Profile />} />
           </Routes>
