@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, CheckCircle2 } from "lucide-react";
 
 const PASTEL_COLORS = {
   red: "#FFB3BA",
@@ -40,7 +40,7 @@ export default function TaskDetailsModal() {
     isEditMode,
     setEditMode,
   } = useModal();
-  const { updateTask, deleteTask } = useSchedule();
+  const { updateTask, deleteTask, completeTask } = useSchedule();
 
   const [taskName, setTaskName] = useState("");
   const [label, setLabel] = useState("");
@@ -94,6 +94,11 @@ export default function TaskDetailsModal() {
       deleteTask(selectedTaskIndex);
       closeTaskDetailsModal();
     }
+  };
+
+  const handleComplete = () => {
+    completeTask(selectedTaskIndex);
+    closeTaskDetailsModal();
   };
 
   const handleClose = () => {
@@ -292,7 +297,15 @@ export default function TaskDetailsModal() {
                   </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="gap-2">
+                  <Button
+                    onClick={handleComplete}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Complete Task
+                  </Button>
                   <Button variant="outline" onClick={handleClose}>
                     Close
                   </Button>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, createContext, useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -15,8 +15,29 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
-export default function Sidebar() {
+// Create a context for sidebar state
+const SidebarContext = createContext();
+
+export const useSidebar = () => {
+  const context = useContext(SidebarContext);
+  if (!context) {
+    return { isCollapsed: false };
+  }
+  return context;
+};
+
+export function SidebarProvider({ children }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  return (
+    <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+}
+
+export default function Sidebar() {
+  const { isCollapsed, setIsCollapsed } = useSidebar();
   const location = useLocation();
 
   const navItems = [
@@ -34,7 +55,7 @@ export default function Sidebar() {
         <div
           className={`text-gray-800 hover:text-black hover:bg-white/40 px-4 py-2 rounded-lg transition cursor-pointer flex items-center gap-3 ${
             isActive ? 'bg-white/50 text-black font-semibold' : ''
-          }`}
+          } ${isCollapsed ? 'justify-center' : ''}`}
         >
           <Icon className="h-5 w-5 flex-shrink-0" />
           {!isCollapsed && <span>{children}</span>}
@@ -45,12 +66,12 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`$
+      className={`${
         isCollapsed ? 'w-20' : 'w-64'
-      } p-6 shadow-xl hidden md:flex flex-col transition-all duration-300 bg-gradient-to-b from-purple-100 to-blue-100`}
+      } p-6 shadow-xl hidden md:flex flex-col transition-all duration-300 bg-gradient-to-b from-purple-100 to-blue-100 fixed left-0 top-0 h-screen z-50`}
     >
       {/* Header with collapse button */}
-      <div className="flex items-center justify-between mb-6">
+      <div className={`flex items-center mb-6 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
         {!isCollapsed && (
           <h2 className="text-xl font-bold text-purple-800">
             FlowScheduler

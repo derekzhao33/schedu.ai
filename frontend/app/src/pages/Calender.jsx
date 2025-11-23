@@ -7,10 +7,10 @@ import { Input } from "../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { motion } from "framer-motion";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isSameWeek, isSameMonth, parseISO, setHours, setMinutes, getHours, getMinutes } from "date-fns";
-import { CalendarIcon, MicIcon } from "lucide-react";
+import { CalendarIcon, MicIcon, CheckCircle2 } from "lucide-react";
 import AddTaskModal from "../components/AddTaskModal";
 import TaskDetailsModal from "../components/TaskDetailsModal";
-import Sidebar from "../components/Sidebar";
+import Sidebar, { useSidebar } from "../components/Sidebar";
 
 const PRIMARY_BG = "#F7F8FC";
 const PRIMARY_DARK = "#355C7D";
@@ -207,9 +207,10 @@ function parseTaskInput(input) {
 }
 
 export default function Calender() {
-  const { events, tasks, addTask } = useSchedule();
+  const { events, tasks, addTask, completeTask } = useSchedule();
   const { openAddTaskModal, openTaskDetailsModal } = useModal();
   const { theme } = useThemeSettings();
+  const { isCollapsed } = useSidebar();
   const [view, setView] = useState("Day");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [input, setInput] = useState("");
@@ -276,7 +277,7 @@ export default function Calender() {
               return (
                 <div key={dayIdx} className="relative border-l flex flex-col h-full rounded-3xl" style={{minWidth: 120, flex: 1, background: '#f3f4f6', border: '1px solid #e5e7eb', boxShadow: '0 0 30px rgba(168, 85, 247, 0.15), inset 0 0 20px rgba(255,255,255,0.3)', backdropFilter: 'blur(10px) saturate(150%)'}}>
                   {/* Day header */}
-                  <div className="sticky top-0 z-10 rounded-t-3xl p-2 text-center font-bold border-b flex items-center justify-center" style={{height: 40, color: '#a78bfa', background: 'rgba(200,180,240,0.2)', borderBottomColor: '#e5e7eb'}}>{format(day, "EEE d")}</div>
+                  <div className="sticky top-0 z-10 rounded-t-3xl p-2 text-center font-bold border-b flex items-center justify-center" style={{height: 40, color: '#A855F7', background: 'rgba(200,180,240,0.05)', borderBottomColor: '#e5e7eb', textShadow: '0 0 20px rgba(168, 85, 247, 0.6), 0 0 40px rgba(168, 85, 247, 0.3)'}}>{format(day, "EEE d")}</div>
                   {/* Timeline slots */}
                   <div className="relative h-full flex flex-col">
                     {hours.map(h => (
@@ -336,6 +337,7 @@ export default function Calender() {
       days.push(day);
       day = addDays(day, 1);
     }
+    const today = new Date();
     // 6 rows for full month, 7 columns for days
     return (
       <div className="flex-1 overflow-y-auto">
@@ -344,33 +346,34 @@ export default function Calender() {
             const dayTasks = getTasksForDay(tasks, d);
             const dayEvents = getTimeline(events, d);
             const isCurrentMonth = isSameMonth(d, selectedDate);
+            const isToday = isSameDay(d, today);
             return (
               <div
                 key={i}
                 className="rounded-3xl p-4 transition-all flex flex-col justify-start"
                 style={{
                   background: isCurrentMonth ? '#f3f4f6' : '#f9fafb',
-                  border: '1px solid #e5e7eb',
+                  border: isToday ? '2px solid #EF4444' : '1px solid #e5e7eb',
                   opacity: isCurrentMonth ? 1 : 0.5,
                   minHeight: 120,
-                  boxShadow: 'none',
+                  boxShadow: isToday ? '0 0 20px rgba(239, 68, 68, 0.4), 0 0 40px rgba(239, 68, 68, 0.2)' : 'none',
                   transition: 'all 0.3s ease',
                   cursor: 'default',
                 }}
                 onMouseEnter={(e) => {
-                  if (isCurrentMonth) {
+                  if (isCurrentMonth && !isToday) {
                     e.currentTarget.style.boxShadow = '0 0 25px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.3)';
                     e.currentTarget.style.background = '#f0f9ff';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (isCurrentMonth) {
+                  if (isCurrentMonth && !isToday) {
                     e.currentTarget.style.boxShadow = 'none';
                     e.currentTarget.style.background = '#f3f4f6';
                   }
                 }}
               >
-                <div className="font-bold mb-2" style={{ color: '#6366f1' }}>{format(d, "d")}</div>
+                <div className="font-bold mb-2" style={{ color: isToday ? '#EF4444' : '#3B82F6', textShadow: isToday ? '0 0 15px rgba(239, 68, 68, 0.5), 0 0 30px rgba(239, 68, 68, 0.25)' : '0 0 15px rgba(59, 130, 246, 0.5), 0 0 30px rgba(59, 130, 246, 0.25)' }}>{format(d, "d")}</div>
                 <div className="space-y-1 flex-1">
                   {dayEvents.slice(0, 1).map((e, j) => (
                     <div key={j} className="text-xs bg-white rounded px-2 py-1 text-pink-600 truncate border border-pink-200/40">
@@ -409,28 +412,29 @@ export default function Calender() {
   return (
     <div className={`flex min-h-screen ${theme === 'dark' ? 'dark' : ''}`} style={{ background: PRIMARY_BG }}>
       <Sidebar />
-      <div className="flex-1 flex flex-col" style={{ height: '100vh', maxHeight: '100vh', overflow: 'hidden' }}>
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`} style={{ height: '100vh', maxHeight: '100vh', overflow: 'hidden' }}>
         {/* Header and View Switcher */}
         <div className="flex flex-col md:flex-row justify-between items-center p-6 pb-2">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={handlePrev} style={{ color: '#EC4899', fontSize: '1.5rem' }}>
+          <Button variant="ghost" onClick={handlePrev} style={{ color: view === 'Week' ? '#A855F7' : view === 'Month' ? '#3B82F6' : '#EC4899', fontSize: '1.5rem', cursor: 'pointer' }}>
             &lt;
           </Button>
           <div className="text-2xl font-bold" style={{ color: '#EC4899' }}>
             {view === "Day" && format(selectedDate, "EEEE, MMM d, yyyy")}
-            {view === "Week" && `Week of ${format(startOfWeek(selectedDate), "MMM d")}`}
-            {view === "Month" && format(selectedDate, "MMMM yyyy")}
+            {view === "Week" && <span style={{textShadow: '0 0 20px rgba(168, 85, 247, 0.6), 0 0 40px rgba(168, 85, 247, 0.3)', color: '#A855F7'}}>{`Week of ${format(startOfWeek(selectedDate), "MMM d")}`}</span>}
+            {view === "Month" && <span style={{textShadow: '0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.3)', color: '#3B82F6'}}>{format(selectedDate, "MMMM yyyy")}</span>}
           </div>
-          <Button variant="ghost" onClick={handleNext} style={{ color: '#EC4899', fontSize: '1.5rem' }}>
+          <Button variant="ghost" onClick={handleNext} style={{ color: view === 'Week' ? '#A855F7' : view === 'Month' ? '#3B82F6' : '#EC4899', fontSize: '1.5rem', cursor: 'pointer' }}>
             &gt;
           </Button>
           <Button
             onClick={openAddTaskModal}
             className="px-6 py-3 font-semibold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition backdrop-blur-md border"
             style={{
-              background: 'rgba(236, 72, 153, 0.2)',
-              color: '#be185d',
-              borderColor: 'rgba(236, 72, 153, 0.3)',
+              background: 'rgba(156, 163, 175, 0.15)',
+              color: '#6B7280',
+              borderColor: 'rgba(156, 163, 175, 0.3)',
+              cursor: 'pointer'
             }}
           >
             + Add Task
@@ -450,6 +454,7 @@ export default function Calender() {
                   fontWeight: 600,
                   border: `2px solid ${colors[idx]}`,
                   boxShadow: isSelected ? `0 4px 15px ${colors[idx]}40` : 'none',
+                  cursor: 'pointer'
                 }}
                 onClick={() => setView(opt)}
               >
@@ -508,23 +513,40 @@ export default function Calender() {
                     {todaysTasks.map((task, i) => {
                       const style = getTaskStyle(task);
                       const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
+                      const taskIndex = tasks.indexOf(task);
                       return (
                         <div
                           key={`task-${i}`}
-                          className="absolute left-2 right-2 rounded-xl p-3 flex flex-row items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md"
+                          className="absolute left-2 right-2 rounded-xl p-3 flex flex-row items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md group"
                           style={{
                             ...style,
                             minHeight: 24,
                             zIndex: 3,
                             backgroundColor: taskColor,
                             border: `2px solid ${taskColor}`,
-                            overflow: 'visible'
+                            overflow: 'visible',
+                            opacity: task.completed ? 0 : 1,
+                            transform: task.completed ? 'scale(0.95)' : 'scale(1)',
+                            transition: 'opacity 1s ease-out, transform 1s ease-out'
                           }}
-                          onClick={() => openTaskDetailsModal(task, i)}
+                          onClick={() => !task.completed && openTaskDetailsModal(task, taskIndex)}
                         >
-                          <div className="font-semibold text-gray-800 whitespace-nowrap">{task.name}</div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="p-1 h-auto hover:bg-white/30 transition-all opacity-0 group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              completeTask(taskIndex);
+                            }}
+                            style={{ cursor: 'pointer' }}
+                            disabled={task.completed}
+                          >
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <div className={`font-semibold text-gray-800 whitespace-nowrap ${task.completed ? 'line-through' : ''}`} style={{ textDecorationThickness: '2px' }}>{task.name}</div>
                           {task.label && (
-                            <span className="text-xs bg-white/50 text-gray-700 rounded px-2 py-0.5">
+                            <span className={`text-xs bg-white/50 text-gray-700 rounded px-2 py-0.5 ${task.completed ? 'line-through' : ''}`}>
                               {task.label}
                             </span>
                           )}
@@ -532,7 +554,7 @@ export default function Calender() {
                             task.priority === 'high' ? 'bg-red-200 text-red-800' :
                             task.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
                             'bg-green-200 text-green-800'
-                          }`}>
+                          } ${task.completed ? 'line-through' : ''}`}>
                             {task.priority}
                           </span>
                         </div>
@@ -553,45 +575,45 @@ export default function Calender() {
         <div
           className="flex items-center w-full max-w-2xl px-6 py-4 gap-3 relative"
           style={{
-            background: 'rgba(255,255,255,0.85)',
+            background: 'rgba(255,255,255,0.95)',
             borderRadius: '50px',
-            boxShadow: '0 8px 32px rgba(236, 72, 153, 0.25), 0 0 60px rgba(168, 85, 247, 0.15), inset 0 2px 10px rgba(255,255,255,0.8)',
             backdropFilter: 'blur(12px)',
-            border: '3px solid transparent',
-            backgroundImage: 'linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)), linear-gradient(90deg, #EC4899, #A855F7, #3B82F6, #10B981, #EC4899)',
+            border: '1.5px solid transparent',
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.95), rgba(255,255,255,0.95)), linear-gradient(90deg, #EC4899, #A855F7, #3B82F6, #10B981, #EC4899)',
             backgroundOrigin: 'border-box',
             backgroundClip: 'padding-box, border-box',
             margin: '0 auto',
             position: 'relative',
             animation: 'liquify 3s ease-in-out infinite',
+            boxShadow: '0 8px 32px rgba(236, 72, 153, 0.25), 0 0 60px rgba(168, 85, 247, 0.15)',
           }}
         >
           {showSuccess && (
-            <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
-              <span className="text-2xl">✓</span>
-              <span className="font-semibold">Task created successfully!</span>
+            <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-2">
+              <span className="text-sm">✓</span>
+              <span className="text-sm font-medium">Task created</span>
             </div>
           )}
           <Input
-            className="flex-1 text-lg border-0 focus:ring-0 focus:outline-none bg-transparent"
+            className="flex-1 text-lg border-0 focus:ring-0 focus:outline-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
             placeholder="Type task details (e.g. 'Meeting from 2pm to 4pm urgent' or 'Workout at 6am [fitness]')"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            style={{ color: '#1a1a1a', fontWeight: 500 }}
+            style={{ color: '#1a1a1a', fontWeight: 500, boxShadow: 'none' }}
           />
-          <Button variant="ghost" style={{ color: '#A855F7', borderRadius: 16 }}>
+          <Button variant="ghost" style={{ color: '#A855F7', borderRadius: 16, cursor: 'pointer' }}>
             <MicIcon size={24} />
           </Button>
           <Button
             onClick={handleQuickAdd}
             disabled={!input.trim()}
             style={{
-              background: input.trim() ? '#EC4899' : '#9CA3AF',
+              background: input.trim() ? '#3B82F6' : '#9CA3AF',
               color: '#fff',
               borderRadius: 16,
               fontWeight: 600,
-              boxShadow: input.trim() ? '0 2px 8px 0 rgba(236,72,153,0.18)' : 'none',
+              boxShadow: input.trim() ? '0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.3)' : 'none',
               cursor: input.trim() ? 'pointer' : 'not-allowed'
             }}
           >
