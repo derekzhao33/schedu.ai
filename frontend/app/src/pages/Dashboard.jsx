@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useModal } from '../context/ModalContext';
+import AddTaskModal from '../components/AddTaskModal';
+import TaskDetailsModal from '../components/TaskDetailsModal';
 
 export default function DashboardPreview() {
+  const { openAddTaskModal } = useModal();
+
   // Mock data for preview
   const mockTasks = [
     { name: 'Complete project proposal', description: 'Finalize slides and submit', date: '2025-11-23', priority: 'high' },
@@ -45,8 +50,9 @@ export default function DashboardPreview() {
           <button
             className="px-4 py-2 text-white rounded-xl shadow hover:opacity-90 transition"
             style={{ backgroundColor: '#181D27' }}
+            onClick={openAddTaskModal}
           >
-            + Add Event
+            + Add Task
           </button>
         </div>
 
@@ -135,6 +141,10 @@ export default function DashboardPreview() {
 
 
       </main>
+
+      {/* Modals */}
+      <AddTaskModal />
+      <TaskDetailsModal />
     </div>
   );
 }

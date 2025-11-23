@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { useSchedule } from "../context/ScheduleContext";
+import { useModal } from "../context/ModalContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { motion } from "framer-motion";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isSameWeek, isSameMonth, parseISO, setHours, setMinutes, getHours, getMinutes } from "date-fns";
 import { CalendarIcon, MicIcon } from "lucide-react";
+import AddTaskModal from "../components/AddTaskModal";
+import TaskDetailsModal from "../components/TaskDetailsModal";
 
 const PRIMARY_BG = "#E0E7FF";
 const PRIMARY_DARK = "#181D27";
@@ -16,6 +19,15 @@ const TIME_END = 24; // 24 hours
 const TIME_INTERVAL = 1; // 1 hour
 
 const VIEW_OPTIONS = ["Day", "Week", "Month"];
+
+const PASTEL_COLORS = {
+  red: "#FFB3BA",
+  blue: "#BAE1FF",
+  yellow: "#FFFFBA",
+  orange: "#FFDFBA",
+  green: "#BAFFC9",
+  purple: "#E0BBE4",
+};
 
 // Basic event style calculation for vertical positioning
 function getEventStyle(event) {
@@ -34,10 +46,32 @@ function getEventStyle(event) {
   };
 }
 
+// Task style calculation for vertical positioning
+function getTaskStyle(task) {
+  if (!task.startTime || !task.endTime) return {};
+  const startHour = parseInt(task.startTime.split(":")[0], 10);
+  const startMin = parseInt(task.startTime.split(":")[1], 10);
+  const endHour = parseInt(task.endTime.split(":")[0], 10);
+  const endMin = parseInt(task.endTime.split(":")[1], 10);
+  const top = (startHour * 60 + startMin) * (40 / 60); // 40px per hour slot
+  const height = ((endHour * 60 + endMin) - (startHour * 60 + startMin)) * (40 / 60);
+  const maxHeight = Math.max(height - 2, 22);
+  return {
+    top: top + 1,
+    height: Math.min(height - 2, maxHeight),
+  };
+}
+
 function getTimeline(events, date) {
   // Filter events for the day and sort by start time
   return events
     .filter(e => isSameDay(parseISO(e.date), date))
+    .sort((a, b) => (a.startTime || "00:00").localeCompare(b.startTime || "00:00"));
+}
+
+function getTasksForDay(tasks, date) {
+  return tasks
+    .filter(t => t.date && isSameDay(parseISO(t.date), date))
     .sort((a, b) => (a.startTime || "00:00").localeCompare(b.startTime || "00:00"));
 }
 
@@ -49,11 +83,105 @@ function getMonthEvents(events, date) {
   return events.filter(e => isSameMonth(parseISO(e.date), date));
 }
 
+// Check if tasks overlap at a specific time
+function getTasksAtPosition(tasks, top) {
+  return tasks.filter(task => {
+    const style = getTaskStyle(task);
+    return style.top <= top && (style.top + style.height) > top;
+  });
+}
+
+// Parse natural language input to extract task details
+function parseTaskInput(input) {
+  const task = {
+    name: "",
+    label: "",
+    startTime: "",
+    endTime: "",
+    priority: "medium",
+    color: Object.keys(PASTEL_COLORS)[Math.floor(Math.random() * 6)],
+    date: format(new Date(), "yyyy-MM-dd"),
+  };
+
+  // Extract time patterns like "at 2pm", "from 2pm to 4pm", "2-4pm", "14:00-16:00"
+  const timePatterns = [
+    /(?:from\s+)?(\d{1,2})(?::(\d{2}))?\s*([ap]m)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*([ap]m)?/i,
+    /at\s+(\d{1,2})(?::(\d{2}))?\s*([ap]m)?/i,
+  ];
+
+  let timeMatch = null;
+  for (const pattern of timePatterns) {
+    timeMatch = input.match(pattern);
+    if (timeMatch) break;
+  }
+
+  if (timeMatch) {
+    if (timeMatch[4]) {
+      // Range pattern (from X to Y)
+      let startHour = parseInt(timeMatch[1]);
+      const startMin = timeMatch[2] || "00";
+      let endHour = parseInt(timeMatch[4]);
+      const endMin = timeMatch[5] || "00";
+
+      // Handle AM/PM
+      if (timeMatch[3]?.toLowerCase() === 'pm' && startHour < 12) startHour += 12;
+      if (timeMatch[3]?.toLowerCase() === 'am' && startHour === 12) startHour = 0;
+      if (timeMatch[6]?.toLowerCase() === 'pm' && endHour < 12) endHour += 12;
+      if (timeMatch[6]?.toLowerCase() === 'am' && endHour === 12) endHour = 0;
+
+      task.startTime = `${String(startHour).padStart(2, '0')}:${startMin}`;
+      task.endTime = `${String(endHour).padStart(2, '0')}:${endMin}`;
+    } else {
+      // Single time pattern (at X)
+      let hour = parseInt(timeMatch[1]);
+      const min = timeMatch[2] || "00";
+
+      if (timeMatch[3]?.toLowerCase() === 'pm' && hour < 12) hour += 12;
+      if (timeMatch[3]?.toLowerCase() === 'am' && hour === 12) hour = 0;
+
+      task.startTime = `${String(hour).padStart(2, '0')}:${min}`;
+      task.endTime = `${String(hour + 1).padStart(2, '0')}:${min}`;
+    }
+
+    // Remove time from task name
+    input = input.replace(timeMatch[0], '').trim();
+  }
+
+  // Extract priority keywords
+  const priorityPatterns = [
+    { regex: /\b(urgent|high priority|important|critical)\b/i, priority: 'high' },
+    { regex: /\b(medium priority|normal)\b/i, priority: 'medium' },
+    { regex: /\b(low priority|minor|later)\b/i, priority: 'low' },
+  ];
+
+  for (const { regex, priority } of priorityPatterns) {
+    if (regex.test(input)) {
+      task.priority = priority;
+      input = input.replace(regex, '').trim();
+      break;
+    }
+  }
+
+  // Extract label/type if present
+  const labelMatch = input.match(/\[([^\]]+)\]/);
+  if (labelMatch) {
+    task.label = labelMatch[1];
+    input = input.replace(labelMatch[0], '').trim();
+  }
+
+  // What's left is the task name
+  task.name = input.trim() || "New Task";
+
+  return task;
+}
+
 export default function Calender() {
-  const { events, tasks } = useSchedule();
+  const { events, tasks, addTask } = useSchedule();
+  const { openAddTaskModal, openTaskDetailsModal } = useModal();
   const [view, setView] = useState("Day");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [input, setInput] = useState("");
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Calendar navigation
   const handlePrev = () => {
@@ -67,9 +195,30 @@ export default function Calender() {
     else if (view === "Month") setSelectedDate(addDays(selectedDate, 30));
   };
 
+  // Handle quick task creation from input
+  const handleQuickAdd = () => {
+    if (!input.trim()) return;
+
+    const parsedTask = parseTaskInput(input);
+    addTask(parsedTask);
+
+    setShowSuccess(true);
+    setInput("");
+    setTimeout(() => {
+      setShowSuccess(false);
+    }, 2000);
+  };
+
+  // Handle Enter key in input
+  const handleInputKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleQuickAdd();
+    }
+  };
+
   // Timeline for day view
   const timeline = getTimeline(events, selectedDate);
-  const todaysTasks = tasks.filter(t => t.date && isSameDay(parseISO(t.date), selectedDate));
+  const todaysTasks = getTasksForDay(tasks, selectedDate);
 
   // Helper: parse "HH:mm" to Date object on selectedDate
   const renderWeekGrid = () => {
@@ -91,6 +240,7 @@ export default function Calender() {
           <div className="flex-1 grid grid-cols-7 gap-2 h-full" style={{height: '100%'}}>
             {days.map((day, dayIdx) => {
               const dayEvents = getTimeline(events, day);
+              const dayTasks = getTasksForDay(tasks, day);
               return (
                 <div key={dayIdx} className="relative border-l flex flex-col h-full" style={{minWidth: 120, background: PRIMARY_LIGHT, borderRadius: 16, borderColor: BORDER_COLOR, boxShadow: '0 2px 8px rgba(24,29,39,0.03)', flex: 1}}>
                   {/* Day header */}
@@ -110,6 +260,28 @@ export default function Calender() {
                           style={{ ...style, minHeight: 24, zIndex: 2, boxShadow: 'none', overflow: 'visible' }}
                         >
                           <div className="font-semibold text-indigo-900 text-xs whitespace-normal break-words">{event.name}</div>
+                        </div>
+                      );
+                    })}
+                    {/* Tasks */}
+                    {dayTasks.map((task, i) => {
+                      const style = getTaskStyle(task);
+                      const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
+                      return (
+                        <div
+                          key={`task-${i}`}
+                          className="absolute left-2 right-2 rounded-lg p-1.5 cursor-pointer transition-all hover:scale-105"
+                          style={{
+                            ...style,
+                            minHeight: 20,
+                            zIndex: 3,
+                            backgroundColor: taskColor,
+                            border: `1px solid ${taskColor}`,
+                            overflow: 'hidden'
+                          }}
+                          onClick={() => openTaskDetailsModal(task, tasks.indexOf(task))}
+                        >
+                          <div className="font-semibold text-gray-800 text-xs truncate">{task.name}</div>
                         </div>
                       );
                     })}
@@ -137,23 +309,48 @@ export default function Calender() {
     return (
       <div className="flex-1 overflow-y-auto pb-40">
         <div className="grid grid-cols-7 gap-2 mt-4 min-h-[calc(100vh-220px)]" style={{alignItems: 'stretch'}}>
-          {days.map((d, i) => (
-            <div
-              key={i}
-              className={`rounded-2xl p-4 cursor-pointer transition shadow flex flex-col justify-start ${isSameDay(d, selectedDate) ? "ring-2 ring-indigo-400" : ""}`}
-              style={{ background: PRIMARY_LIGHT, color: PRIMARY_DARK, opacity: isSameMonth(d, selectedDate) ? 1 : 0.5, minHeight: 120, border: `1px solid ${BORDER_COLOR}` }}
-              onClick={() => setSelectedDate(d)}
-            >
-              <div className="font-bold mb-2">{format(d, "d")}</div>
-              <div className="space-y-1 flex-1">
-                {getTimeline(events, d).slice(0, 2).map((e, j) => (
-                  <div key={j} className="text-xs bg-white rounded px-2 py-1 text-gray-700 truncate border border-indigo-100">
-                    {e.name}
-                  </div>
-                ))}
+          {days.map((d, i) => {
+            const dayTasks = getTasksForDay(tasks, d);
+            const dayEvents = getTimeline(events, d);
+            return (
+              <div
+                key={i}
+                className={`rounded-2xl p-4 cursor-pointer transition shadow flex flex-col justify-start ${isSameDay(d, selectedDate) ? "ring-2 ring-indigo-400" : ""}`}
+                style={{ background: PRIMARY_LIGHT, color: PRIMARY_DARK, opacity: isSameMonth(d, selectedDate) ? 1 : 0.5, minHeight: 120, border: `1px solid ${BORDER_COLOR}` }}
+                onClick={() => setSelectedDate(d)}
+              >
+                <div className="font-bold mb-2">{format(d, "d")}</div>
+                <div className="space-y-1 flex-1">
+                  {dayEvents.slice(0, 1).map((e, j) => (
+                    <div key={j} className="text-xs bg-white rounded px-2 py-1 text-gray-700 truncate border border-indigo-100">
+                      {e.name}
+                    </div>
+                  ))}
+                  {dayTasks.slice(0, 2).map((task, j) => {
+                    const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
+                    return (
+                      <div
+                        key={`task-${j}`}
+                        className="text-xs rounded px-2 py-1 text-gray-800 truncate cursor-pointer hover:scale-105 transition-all"
+                        style={{ backgroundColor: taskColor, border: `1px solid ${taskColor}` }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openTaskDetailsModal(task, tasks.indexOf(task));
+                        }}
+                      >
+                        {task.name}
+                      </div>
+                    );
+                  })}
+                  {(dayTasks.length + dayEvents.length > 3) && (
+                    <div className="text-xs text-gray-500 italic">
+                      +{dayTasks.length + dayEvents.length - 3} more
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -174,6 +371,19 @@ export default function Calender() {
           </div>
           <Button variant="ghost" onClick={handleNext} style={{ color: PRIMARY_DARK }}>
             &gt;
+          </Button>
+          <Button
+            onClick={openAddTaskModal}
+            style={{
+              background: PRIMARY_DARK,
+              color: PRIMARY_BG,
+              borderRadius: 16,
+              fontWeight: 600,
+              paddingLeft: 20,
+              paddingRight: 20,
+            }}
+          >
+            + Add Task
           </Button>
         </div>
         <div className="flex gap-2 mt-4 md:mt-0">
@@ -239,29 +449,42 @@ export default function Calender() {
                         </div>
                       );
                     })}
+                    {/* Tasks */}
+                    {todaysTasks.map((task, i) => {
+                      const style = getTaskStyle(task);
+                      const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
+                      return (
+                        <div
+                          key={`task-${i}`}
+                          className="absolute left-2 right-2 rounded-xl p-3 flex flex-row items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md"
+                          style={{
+                            ...style,
+                            minHeight: 24,
+                            zIndex: 3,
+                            backgroundColor: taskColor,
+                            border: `2px solid ${taskColor}`,
+                            overflow: 'visible'
+                          }}
+                          onClick={() => openTaskDetailsModal(task, i)}
+                        >
+                          <div className="font-semibold text-gray-800 whitespace-nowrap">{task.name}</div>
+                          {task.label && (
+                            <span className="text-xs bg-white/50 text-gray-700 rounded px-2 py-0.5">
+                              {task.label}
+                            </span>
+                          )}
+                          <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded ${
+                            task.priority === 'high' ? 'bg-red-200 text-red-800' :
+                            task.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
+                            'bg-green-200 text-green-800'
+                          }`}>
+                            {task.priority}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            </div>
-            {/* Tasks for the day */}
-            <div className="mt-8">
-              <div className="text-lg font-bold mb-2" style={{ color: PRIMARY_DARK }}>Tasks</div>
-              <div className="space-y-2">
-                {todaysTasks.length === 0 ? (
-                  <div className="text-gray-400">No tasks for this day.</div>
-                ) : (
-                  todaysTasks.map((task, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-indigo-100 rounded-xl p-3" style={{ boxShadow: 'none', overflow: 'visible' }}>
-                      <div className="font-semibold text-indigo-900 whitespace-normal break-words">{task.name}</div>
-                      {task.deadline && (
-                        <span className="text-xs bg-indigo-200 text-indigo-800 rounded px-2 py-0.5 ml-2 whitespace-normal break-words">
-                          {/* No time, just show 'Due' if you want: */}
-                          Due
-                        </span>
-                      )}
-                    </div>
-                  ))
-                )}
               </div>
             </div>
           </div>
@@ -272,22 +495,43 @@ export default function Calender() {
 
       {/* Input Bar */}
       <div className="fixed bottom-0 left-0 w-full flex justify-center items-center p-6" style={{ background: PRIMARY_BG, borderTopLeftRadius: 32, borderTopRightRadius: 32, boxShadow: '0 -2px 16px rgba(24,29,39,0.08)' }}>
-        <div className="flex items-center w-full max-w-2xl bg-white rounded-2xl shadow-lg px-4 py-3 gap-3">
+        <div className="flex items-center w-full max-w-2xl bg-white rounded-2xl shadow-lg px-4 py-3 gap-3 relative">
+          {showSuccess && (
+            <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+              <span className="text-2xl">✓</span>
+              <span className="font-semibold">Task created successfully!</span>
+            </div>
+          )}
           <Input
             className="flex-1 text-lg border-0 focus:ring-0 focus:outline-none bg-transparent"
-            placeholder="Add an event or task (e.g. 'Meeting at 5pm' or 'Finish report by Friday')"
+            placeholder="Type task details (e.g. 'Meeting from 2pm to 4pm urgent' or 'Workout at 6am [fitness]')"
             value={input}
             onChange={e => setInput(e.target.value)}
+            onKeyDown={handleInputKeyDown}
             style={{ color: PRIMARY_DARK }}
           />
           <Button variant="ghost" style={{ color: PRIMARY_DARK, borderRadius: 16 }}>
             <MicIcon size={24} />
           </Button>
-          <Button style={{ background: PRIMARY_DARK, color: PRIMARY_BG, borderRadius: 16, fontWeight: 600 }}>
+          <Button
+            onClick={handleQuickAdd}
+            disabled={!input.trim()}
+            style={{
+              background: input.trim() ? PRIMARY_DARK : '#9CA3AF',
+              color: PRIMARY_BG,
+              borderRadius: 16,
+              fontWeight: 600,
+              cursor: input.trim() ? 'pointer' : 'not-allowed'
+            }}
+          >
             Add
           </Button>
         </div>
       </div>
+
+      {/* Modals */}
+      <AddTaskModal />
+      <TaskDetailsModal />
     </div>
   );
 }
