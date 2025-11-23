@@ -1,0 +1,21 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsx ./src/main.ts",
+    "dev": "tsx watch ./src/main.ts"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "prisma": "^7.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}
