@@ -2,37 +2,21 @@ import express from 'express';
 import { type Task } from '../../generated/prisma/client.js'
 import { Router } from 'express';
 import {
-    getTask,
-    getAllTasks,
     createTask,
     updateTask,
-    deleteTask
+    deleteTask,
 } from './task.service';
 
 const router: Router = Router();
-
-router.get('/', (req: express.Request, res: express.Response) => {
-    const tasks: Promise<Task[]> = getAllTasks();
-    res.json(tasks);
-});
-
-router.get('/:id', (req: express.Request, res: express.Response) => {
-    const id: number = Number(req.params.id);
-    const task: Promise<Task | null> =  getTask(id);
-    if (task) {
-        res.json(task);
-    } else {
-        res.status(404).json({ error: 'Task not found' });
-    }
-});
 
 router.post('/', async (req: express.Request, res: express.Response) => {
     const { start_time, end_time, user_id }: Task = req.body;
     try {
         const task: Task = await createTask(new Date(start_time), new Date(end_time), user_id);
-        res.status(201).json(task);
+        res.status(201).json(JSON.stringify(task));
     } catch (error) {
-        res.status(400).json({ error: 'Task creation failed' });
+        res.status(400).json({ error: '400: Bad Request' });
+        console.log(error);
     }
 });
 

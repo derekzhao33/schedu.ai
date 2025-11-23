@@ -1,18 +1,41 @@
 import { Router } from 'express';
 import express from 'express';
 import { type User } from "../../generated/prisma/client.js";
-import { getUser, createUser, updateUser } from "./user.service.js";
+import { type Task } from "../../generated/prisma/client.js";
+import { getUser, createUser, updateUser, getAllTasksForUser, getTaskForUser } from "./user.service.js";
 
 const router: Router = Router();
 
-router.get('/:id', (req: express.Request, res: express.Response) => {
+router.get('/:id', async (req: express.Request, res: express.Response) => {
     const id: number = Number(req.params.id);
-    const user: Promise<User | null> = getUser(id);
+    const user: User | null = await getUser(id);
 
     if (user) {
         res.json(user);
     } else {
         res.status(404).json({ error: '404: Not Found'});
+    }
+})
+
+router.get('/:userId/tasks/:taskId', async (req: express.Request, res: express.Response) => {
+    const userId: number = Number(req.params.userId);
+    const taskId: number = Number(req.params.taskId);
+    const task: Task | null = await getTaskForUser(userId, taskId);
+
+    if (userId && taskId) {
+        res.json(task);
+    } else {
+        res.status(404).json({ error: "404: Not found" });
+    }
+})
+
+router.get('/:id/tasks', async (req: express.Request, res: express.Response) => {
+    try {
+        const tasks: Task[] | null = await getAllTasksForUser(Number(req.params.id));
+        res.json(tasks);
+    } catch (error) {
+        res.status(404).json({ error: "400: Bad Request"});
+        console.log(error);
     }
 })
 

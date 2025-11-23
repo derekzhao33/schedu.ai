@@ -1,4 +1,5 @@
 import { type User } from "../../generated/prisma/client.js";
+import { type Task } from "../../generated/prisma/client.js";
 import prisma from "../../shared/prisma.js"
 
 export async function getUser(
@@ -12,6 +13,37 @@ export async function getUser(
 
     return result;
 }
+
+export async function getAllTasksForUser(
+    userId: number,
+): Promise<Task[] | null> {
+    return await prisma.task.findMany({
+        where: {
+            user: {
+                is: {
+                    id: userId,
+                }
+            }
+        }
+    });
+}
+
+export async function getTaskForUser(
+    userId: number,
+    taskId: number,
+): Promise<Task | null> {
+    return await prisma.task.findUnique({
+        where: {
+            user: {
+                is: {
+                    id: userId,
+                }
+            },
+
+            id: taskId,
+        }
+    });
+}
  
 // TODO: Add email validation (with zod?)
 
@@ -21,15 +53,13 @@ export async function createUser(
     email: string, 
     password: string,
 ): Promise<User> {
-    const newUser = {
-        first_name: firstName,
-        last_name: lastName,
-        email, 
-        password,
-    };
-
     const result: User = await prisma.user.create({
-        data: newUser,
+        data: {
+            first_name: firstName,
+            last_name: lastName,
+            email,
+            password,
+        },
     });
 
     return result;

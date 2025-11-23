@@ -1,13 +1,6 @@
 import prisma from "../../shared/prisma.js";
 import { type Task } from "../../generated/prisma/client.js";
-
-export async function getTask(id: number): Promise<Task | null> {
-    return await prisma.task.findUnique({ where: { id } });
-}
-
-export async function getAllTasks(): Promise<Task[]> {
-    return await prisma.task.findMany();
-}
+import { type User } from "../../generated/prisma/client.js";
 
 export async function createTask(
     start_time: Date,
