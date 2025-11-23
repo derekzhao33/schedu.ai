@@ -6,6 +6,7 @@ export function ScheduleProvider({ children }) {
   const [tasks, setTasks] = useState([]);
   const [events, setEvents] = useState([]);
 
+
   const addTask = (task) => {
     if (!task || !task.name) {
       throw new Error("Task must have a name");
