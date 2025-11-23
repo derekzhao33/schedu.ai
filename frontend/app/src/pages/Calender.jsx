@@ -31,6 +31,35 @@ const PASTEL_COLORS = {
   purple: "#E0BBE4",
 };
 
+// Add CSS animation keyframes
+const styles = `
+  @keyframes liquify {
+    0%, 100% {
+      border-radius: 50px;
+      box-shadow: 0 8px 32px rgba(236, 72, 153, 0.25), 0 0 60px rgba(168, 85, 247, 0.15), inset 0 2px 10px rgba(255,255,255,0.8);
+    }
+    25% {
+      border-radius: 45px 55px 50px 48px;
+      box-shadow: 0 10px 35px rgba(168, 85, 247, 0.3), 0 0 70px rgba(236, 72, 153, 0.2), inset 0 2px 12px rgba(255,255,255,0.9);
+    }
+    50% {
+      border-radius: 52px 48px 53px 47px;
+      box-shadow: 0 12px 38px rgba(59, 130, 246, 0.25), 0 0 65px rgba(16, 185, 129, 0.18), inset 0 3px 15px rgba(255,255,255,0.85);
+    }
+    75% {
+      border-radius: 48px 52px 46px 54px;
+      box-shadow: 0 9px 30px rgba(16, 185, 129, 0.22), 0 0 68px rgba(59, 130, 246, 0.2), inset 0 2px 11px rgba(255,255,255,0.9);
+    }
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement("style");
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
+}
+
 // Basic event style calculation for vertical positioning
 function getEventStyle(event) {
   if (!event.startTime || !event.endTime) return {};
@@ -229,8 +258,8 @@ export default function Calender() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     const hours = Array.from({ length: TIME_END - TIME_START }, (_, i) => TIME_START + i);
     return (
-      <div className="overflow-x-auto mt-4 flex-1" style={{minHeight: 0, maxHeight: 'calc(100vh - 220px)'}}>
-        <div className="flex flex-row w-full h-full" style={{minHeight: 'calc(100vh - 220px)', maxHeight: 'calc(100vh - 220px)'}}>
+      <div className="overflow-x-auto mt-4 flex-1">
+        <div className="flex flex-row w-full h-full">
           {/* Time column */}
           <div className="flex flex-col pr-2" style={{width: 56, marginRight: 8, height: '100%', marginTop: 23}}>
             {hours.map(h => (
@@ -240,18 +269,18 @@ export default function Calender() {
             ))}
           </div>
           {/* Days columns */}
-          <div className="flex-1 grid grid-cols-7 gap-2 h-full" style={{height: '100%'}}>
+          <div className="flex-1 grid grid-cols-7 gap-2 h-full">
             {days.map((day, dayIdx) => {
               const dayEvents = getTimeline(events, day);
               const dayTasks = getTasksForDay(tasks, day);
               return (
-                <div key={dayIdx} className="relative border-l flex flex-col h-full" style={{minWidth: 120, background: PRIMARY_LIGHT, borderRadius: 16, borderColor: BORDER_COLOR, boxShadow: '0 2px 8px rgba(24,29,39,0.03)', flex: 1}}>
+                <div key={dayIdx} className="relative border-l flex flex-col h-full rounded-3xl" style={{minWidth: 120, flex: 1, background: '#f3f4f6', border: '1px solid #e5e7eb', boxShadow: '0 0 30px rgba(168, 85, 247, 0.15), inset 0 0 20px rgba(255,255,255,0.3)', backdropFilter: 'blur(10px) saturate(150%)'}}>
                   {/* Day header */}
-                  <div className="sticky top-0 z-10 bg-[#F6F8FF] rounded-t-2xl p-2 text-center font-bold border-b flex items-center justify-center" style={{ color: PRIMARY_DARK, borderColor: BORDER_COLOR, height: 40 }}>{format(day, "EEE d")}</div>
+                  <div className="sticky top-0 z-10 rounded-t-3xl p-2 text-center font-bold border-b flex items-center justify-center" style={{height: 40, color: '#a78bfa', background: 'rgba(200,180,240,0.2)', borderBottomColor: '#e5e7eb'}}>{format(day, "EEE d")}</div>
                   {/* Timeline slots */}
-                  <div className="relative h-full flex flex-col" style={{height: '100%'}}>
+                  <div className="relative h-full flex flex-col">
                     {hours.map(h => (
-                      <div key={h} className="border-b" style={{height: 40, minHeight: 40, borderColor: BORDER_COLOR, borderBottomWidth: 1, borderStyle: 'solid'}}></div>
+                      <div key={h} className="border-b" style={{height: 40, minHeight: 40}}></div>
                     ))}
                     {/* Events */}
                     {dayEvents.map((event, i) => {
@@ -259,17 +288,17 @@ export default function Calender() {
                       return (
                         <div
                           key={i}
-                          className="absolute left-2 right-2 bg-white rounded-xl p-2 flex flex-col justify-center border border-indigo-100"
-                          style={{ ...style, minHeight: 24, zIndex: 2, boxShadow: 'none', overflow: 'visible' }}
+                          className="absolute left-2 right-2 bg-white rounded-xl p-2 flex flex-col justify-center border border-pink-200/40 shadow-pink-500/10"
+                          style={{ ...style, minHeight: 24, zIndex: 2, overflow: 'visible' }}
                         >
-                          <div className="font-semibold text-indigo-900 text-xs whitespace-normal break-words">{event.name}</div>
+                          <div className="font-semibold text-pink-600 text-xs whitespace-normal break-words">{event.name}</div>
                         </div>
                       );
                     })}
                     {/* Tasks */}
                     {dayTasks.map((task, i) => {
                       const style = getTaskStyle(task);
-                      const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
+                      const taskColor = dayIdx % 3 === 0 ? '#F9A8D4' : dayIdx % 3 === 1 ? '#C4B5FD' : '#93C5FD';
                       return (
                         <div
                           key={`task-${i}`}
@@ -284,7 +313,7 @@ export default function Calender() {
                           }}
                           onClick={() => openTaskDetailsModal(task, tasks.indexOf(task))}
                         >
-                          <div className="font-semibold text-gray-800 text-xs truncate">{task.name}</div>
+                          <div className="font-semibold text-black text-xs truncate">{task.name}</div>
                         </div>
                       );
                     })}
@@ -297,7 +326,6 @@ export default function Calender() {
       </div>
     );
   };
-// Duplicate block removed and function properly closed above
 
   const renderMonthGrid = () => {
     const start = startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 0 });
@@ -310,32 +338,51 @@ export default function Calender() {
     }
     // 6 rows for full month, 7 columns for days
     return (
-      <div className="flex-1 overflow-y-auto pb-40">
+      <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-7 gap-2 mt-4 min-h-[calc(100vh-220px)]" style={{alignItems: 'stretch'}}>
           {days.map((d, i) => {
             const dayTasks = getTasksForDay(tasks, d);
             const dayEvents = getTimeline(events, d);
+            const isCurrentMonth = isSameMonth(d, selectedDate);
             return (
               <div
                 key={i}
-                className={`rounded-2xl p-4 cursor-pointer transition shadow flex flex-col justify-start ${isSameDay(d, selectedDate) ? "ring-2 ring-indigo-400" : ""}`}
-                style={{ background: PRIMARY_LIGHT, color: PRIMARY_DARK, opacity: isSameMonth(d, selectedDate) ? 1 : 0.5, minHeight: 120, border: `1px solid ${BORDER_COLOR}` }}
-                onClick={() => setSelectedDate(d)}
+                className="rounded-3xl p-4 transition-all flex flex-col justify-start"
+                style={{
+                  background: isCurrentMonth ? '#f3f4f6' : '#f9fafb',
+                  border: '1px solid #e5e7eb',
+                  opacity: isCurrentMonth ? 1 : 0.5,
+                  minHeight: 120,
+                  boxShadow: 'none',
+                  transition: 'all 0.3s ease',
+                  cursor: 'default',
+                }}
+                onMouseEnter={(e) => {
+                  if (isCurrentMonth) {
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.3)';
+                    e.currentTarget.style.background = '#f0f9ff';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (isCurrentMonth) {
+                    e.currentTarget.style.boxShadow = 'none';
+                    e.currentTarget.style.background = '#f3f4f6';
+                  }
+                }}
               >
-                <div className="font-bold mb-2">{format(d, "d")}</div>
+                <div className="font-bold mb-2" style={{ color: '#6366f1' }}>{format(d, "d")}</div>
                 <div className="space-y-1 flex-1">
                   {dayEvents.slice(0, 1).map((e, j) => (
-                    <div key={j} className="text-xs bg-white rounded px-2 py-1 text-gray-700 truncate border border-indigo-100">
+                    <div key={j} className="text-xs bg-white rounded px-2 py-1 text-pink-600 truncate border border-pink-200/40">
                       {e.name}
                     </div>
                   ))}
                   {dayTasks.slice(0, 2).map((task, j) => {
-                    const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
                     return (
                       <div
                         key={`task-${j}`}
-                        className="text-xs rounded px-2 py-1 text-gray-800 truncate cursor-pointer hover:scale-105 transition-all"
-                        style={{ backgroundColor: taskColor, border: `1px solid ${taskColor}` }}
+                        className="text-xs rounded px-2 py-1 text-black truncate cursor-pointer hover:scale-105 transition-all"
+                        style={{ backgroundColor: '#e5d4f3', border: '1px solid #d4b8e8' }}
                         onClick={(e) => {
                           e.stopPropagation();
                           openTaskDetailsModal(task, tasks.indexOf(task));
@@ -366,47 +413,50 @@ export default function Calender() {
         {/* Header and View Switcher */}
         <div className="flex flex-col md:flex-row justify-between items-center p-6 pb-2">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={handlePrev} style={{ color: PRIMARY_DARK }}>
+          <Button variant="ghost" onClick={handlePrev} style={{ color: '#EC4899', fontSize: '1.5rem' }}>
             &lt;
           </Button>
-          <div className="text-2xl font-bold" style={{ color: PRIMARY_DARK }}>
+          <div className="text-2xl font-bold" style={{ color: '#EC4899' }}>
             {view === "Day" && format(selectedDate, "EEEE, MMM d, yyyy")}
             {view === "Week" && `Week of ${format(startOfWeek(selectedDate), "MMM d")}`}
             {view === "Month" && format(selectedDate, "MMMM yyyy")}
           </div>
-          <Button variant="ghost" onClick={handleNext} style={{ color: PRIMARY_DARK }}>
+          <Button variant="ghost" onClick={handleNext} style={{ color: '#EC4899', fontSize: '1.5rem' }}>
             &gt;
           </Button>
           <Button
             onClick={openAddTaskModal}
+            className="px-6 py-3 font-semibold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition backdrop-blur-md border"
             style={{
-              background: PRIMARY_DARK,
-              color: PRIMARY_BG,
-              borderRadius: 16,
-              fontWeight: 600,
-              paddingLeft: 20,
-              paddingRight: 20,
+              background: 'rgba(236, 72, 153, 0.2)',
+              color: '#be185d',
+              borderColor: 'rgba(236, 72, 153, 0.3)',
             }}
           >
             + Add Task
           </Button>
         </div>
         <div className="flex gap-2 mt-4 md:mt-0">
-          {VIEW_OPTIONS.map(opt => (
-            <Button
-              key={opt}
-              variant={view === opt ? "default" : "outline"}
-              style={{
-                background: view === opt ? PRIMARY_DARK : PRIMARY_BG,
-                color: view === opt ? PRIMARY_BG : PRIMARY_DARK,
-                borderRadius: 16,
-                fontWeight: 600
-              }}
-              onClick={() => setView(opt)}
-            >
-              {opt}
-            </Button>
-          ))}
+          {VIEW_OPTIONS.map((opt, idx) => {
+            const colors = ['#EC4899', '#A855F7', '#3B82F6'];
+            const isSelected = view === opt;
+            return (
+              <Button
+                key={opt}
+                style={{
+                  background: isSelected ? colors[idx] : 'rgba(255,255,255,0.6)',
+                  color: isSelected ? '#fff' : colors[idx],
+                  borderRadius: 16,
+                  fontWeight: 600,
+                  border: `2px solid ${colors[idx]}`,
+                  boxShadow: isSelected ? `0 4px 15px ${colors[idx]}40` : 'none',
+                }}
+                onClick={() => setView(opt)}
+              >
+                {opt}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
@@ -420,7 +470,7 @@ export default function Calender() {
       >
         {view === "Day" && (
           <div className="rounded-3xl shadow-xl p-6 mt-4 flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: 'transparent', minHeight: 0 }}>
-            <div className="text-xl font-bold mb-4" style={{ color: PRIMARY_DARK }}>Timeline</div>
+            <div className="text-xl font-bold mb-4" style={{ color: '#EC4899' }}>Timeline</div>
             <div className="flex-1 min-h-0 flex flex-col h-full" style={{ position: 'relative', minHeight: 0, height: 'calc(100vh - 220px)' }}>
               <div className="flex-1 min-h-0 flex flex-col h-full" style={{height: '100%'}}>
                 <div className="flex flex-1 h-full min-h-0 overflow-y-auto" style={{height: '100%'}}>
@@ -498,9 +548,24 @@ export default function Calender() {
         {view === "Month" && renderMonthGrid()}
       </motion.div>
 
-      {/* Input Bar */}
-      <div className="fixed bottom-0 left-0 w-full flex justify-center items-center p-6" style={{ background: PRIMARY_BG, borderTopLeftRadius: 32, borderTopRightRadius: 32, boxShadow: '0 -2px 16px rgba(24,29,39,0.08)' }}>
-        <div className="flex items-center w-full max-w-2xl bg-white rounded-2xl shadow-lg px-4 py-3 gap-3 relative">
+      {/* Centered Glassmorphic Input Bar */}
+      <div className="w-full flex justify-center items-center py-6" style={{ position: 'relative', zIndex: 20 }}>
+        <div
+          className="flex items-center w-full max-w-2xl px-6 py-4 gap-3 relative"
+          style={{
+            background: 'rgba(255,255,255,0.85)',
+            borderRadius: '50px',
+            boxShadow: '0 8px 32px rgba(236, 72, 153, 0.25), 0 0 60px rgba(168, 85, 247, 0.15), inset 0 2px 10px rgba(255,255,255,0.8)',
+            backdropFilter: 'blur(12px)',
+            border: '3px solid transparent',
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)), linear-gradient(90deg, #EC4899, #A855F7, #3B82F6, #10B981, #EC4899)',
+            backgroundOrigin: 'border-box',
+            backgroundClip: 'padding-box, border-box',
+            margin: '0 auto',
+            position: 'relative',
+            animation: 'liquify 3s ease-in-out infinite',
+          }}
+        >
           {showSuccess && (
             <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
               <span className="text-2xl">✓</span>
@@ -513,19 +578,20 @@ export default function Calender() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            style={{ color: PRIMARY_DARK }}
+            style={{ color: '#1a1a1a', fontWeight: 500 }}
           />
-          <Button variant="ghost" style={{ color: PRIMARY_DARK, borderRadius: 16 }}>
+          <Button variant="ghost" style={{ color: '#A855F7', borderRadius: 16 }}>
             <MicIcon size={24} />
           </Button>
           <Button
             onClick={handleQuickAdd}
             disabled={!input.trim()}
             style={{
-              background: input.trim() ? PRIMARY_DARK : '#9CA3AF',
-              color: PRIMARY_BG,
+              background: input.trim() ? '#EC4899' : '#9CA3AF',
+              color: '#fff',
               borderRadius: 16,
               fontWeight: 600,
+              boxShadow: input.trim() ? '0 2px 8px 0 rgba(236,72,153,0.18)' : 'none',
               cursor: input.trim() ? 'pointer' : 'not-allowed'
             }}
           >
