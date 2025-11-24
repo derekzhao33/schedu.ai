@@ -5,7 +5,7 @@ import { useThemeSettings } from '../context/ThemeContext';
 import { Button } from '../components/ui/button';
 import AddTaskModal from '../components/AddTaskModal';
 import TaskDetailsModal from '../components/TaskDetailsModal';
-import Sidebar from '../components/Sidebar';
+import Sidebar, { useSidebar } from '../components/Sidebar';
 import { motion } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 
@@ -26,11 +26,12 @@ export default function Tasks() {
   const { tasks } = useSchedule();
   const { openAddTaskModal, openTaskDetailsModal } = useModal();
   const { theme } = useThemeSettings();
+  const { isCollapsed } = useSidebar();
 
   return (
     <div className={`flex min-h-screen ${theme === 'dark' ? 'dark' : ''}`} style={{ background: PRIMARY_BG }}>
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center p-6">
         <h1 className="text-3xl font-bold" style={{ color: PRIMARY_DARK }}>
@@ -74,12 +75,15 @@ export default function Tasks() {
                   style={{
                     backgroundColor: taskColor,
                     border: `2px solid ${taskColor}`,
+                    opacity: task.completed ? 0 : 1,
+                    transform: task.completed ? 'scale(0.95)' : 'scale(1)',
+                    transition: 'opacity 1s ease-out, transform 1s ease-out'
                   }}
-                  onClick={() => openTaskDetailsModal(task, index)}
+                  onClick={() => !task.completed && openTaskDetailsModal(task, index)}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-800 mb-2">
+                      <h3 className={`text-xl font-bold text-gray-800 mb-2 ${task.completed ? 'line-through' : ''}`} style={{ textDecorationThickness: '2px' }}>
                         {task.name}
                       </h3>
                       {task.label && (

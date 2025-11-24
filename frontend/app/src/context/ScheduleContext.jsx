@@ -5,6 +5,7 @@ const ScheduleContext = createContext();
 export function ScheduleProvider({ children }) {
   const [tasks, setTasks] = useState([]);
   const [events, setEvents] = useState([]);
+  const [googleCalendarEvents, setGoogleCalendarEvents] = useState([]);
 
 
   const addTask = (task) => {
@@ -28,6 +29,20 @@ export function ScheduleProvider({ children }) {
     setTasks((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const completeTask = (index) => {
+    if (index < 0 || index >= tasks.length) {
+      throw new Error("Invalid task index");
+    }
+    // Mark task as completed with strikethrough
+    setTasks((prev) => prev.map((task, i) =>
+      i === index ? { ...task, completed: true } : task
+    ));
+    // Fade out and remove after animation
+    setTimeout(() => {
+      setTasks((prev) => prev.filter((_, i) => i !== index));
+    }, 1500); // Give time for strikethrough animation
+  };
+
   const addEvent = (event) => {
     if (!event || !event.name) {
       throw new Error("Event must have a name");
@@ -49,6 +64,15 @@ export function ScheduleProvider({ children }) {
     setEvents((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const syncGoogleCalendarEvents = (googleEvents) => {
+    setGoogleCalendarEvents(googleEvents);
+  };
+
+  // Merge local events and Google Calendar events
+  const getAllEvents = () => {
+    return [...events, ...googleCalendarEvents];
+  };
+
   return (
     <ScheduleContext.Provider
       value={{
@@ -56,12 +80,16 @@ export function ScheduleProvider({ children }) {
         setTasks,
         events,
         setEvents,
+        googleCalendarEvents,
         addTask,
         updateTask,
         deleteTask,
+        completeTask,
         addEvent,
         updateEvent,
-        deleteEvent
+        deleteEvent,
+        syncGoogleCalendarEvents,
+        getAllEvents
       }}
     >
       {children}

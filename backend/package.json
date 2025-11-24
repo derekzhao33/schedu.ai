@@ -19,6 +19,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-list-endpoints": "^7.1.1",
+    "googleapis": "^166.0.0",
     "openai": "^6.9.1"
   },
   "devDependencies": {

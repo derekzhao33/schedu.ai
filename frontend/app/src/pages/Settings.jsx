@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 import { Separator } from "../components/ui/separator";
-import Sidebar from "../components/Sidebar";
+import Sidebar, { useSidebar } from "../components/Sidebar";
 import {
   Select,
   SelectContent,
@@ -35,7 +35,7 @@ import {
 
 export default function Settings() {
 
-
+  const { isCollapsed } = useSidebar();
   const {
     theme,
     setTheme,
@@ -63,7 +63,7 @@ export default function Settings() {
 
 
       {/* Main content */}
-      <main className="flex-1 p-8 space-y-6">
+      <main className={`flex-1 p-8 space-y-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
         {/* Header */}
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">
