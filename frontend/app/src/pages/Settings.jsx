@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { useThemeSettings } from "../context/ThemeContext";
 import { useSchedule } from "../context/ScheduleContext";
+import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
 import { Separator } from "../components/ui/separator";
 import Sidebar, { useSidebar } from "../components/Sidebar";
@@ -30,12 +32,15 @@ import {
   Bell,
   CalendarDays,
   AlertTriangle,
+  User as UserIcon,
+  Lock,
 } from "lucide-react";
 
 
 export default function Settings() {
 
   const { isCollapsed } = useSidebar();
+  const { user, updateProfile, changePassword } = useAuth();
   const {
     theme,
     setTheme,
@@ -47,8 +52,74 @@ export default function Settings() {
     setWeekStart,
   } = useThemeSettings();
 
-
   const { setTasks, setEvents } = useSchedule();
+
+  // Profile form states
+  const [profileFirstName, setProfileFirstName] = useState(user?.first_name || '');
+  const [profileLastName, setProfileLastName] = useState(user?.last_name || '');
+  const [profileEmail, setProfileEmail] = useState(user?.email || '');
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // Password change states
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  const handleProfileUpdate = async () => {
+    setProfileError('');
+    setProfileSuccess('');
+    setProfileLoading(true);
+
+    try {
+      if (!profileFirstName || !profileLastName || !profileEmail) {
+        throw new Error('All fields are required');
+      }
+
+      await updateProfile(profileFirstName, profileLastName, profileEmail);
+      setProfileSuccess('Profile updated successfully');
+      setTimeout(() => setProfileSuccess(''), 3000);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Update failed');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+    setPasswordLoading(true);
+
+    try {
+      if (!oldPassword || !newPassword || !confirmPassword) {
+        throw new Error('All fields are required');
+      }
+
+      if (newPassword !== confirmPassword) {
+        throw new Error('New passwords do not match');
+      }
+
+      if (newPassword.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
+
+      await changePassword(oldPassword, newPassword);
+      setPasswordSuccess('Password changed successfully');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(''), 3000);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Password change failed');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   const resetAllData = () => {
     setTasks([]);
@@ -74,7 +145,169 @@ export default function Settings() {
 
         {/* Settings Cards */}
         <div className="space-y-6">
-          {/* Theme Selection */}
+          {/* Profile Settings */}
+          <div>
+            <Card className="bg-white border border-gray-200 shadow-md rounded-3xl">
+              <CardHeader>
+                <CardTitle className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                  <UserIcon className="h-6 w-6 text-blue-600" />
+                  Profile Information
+                </CardTitle>
+                <CardDescription className="text-gray-600">
+                  Update your personal information
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {profileError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
+                    {profileError}
+                  </div>
+                )}
+                {profileSuccess && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-600 text-sm">
+                    {profileSuccess}
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName" className="text-gray-700">
+                      First Name
+                    </Label>
+                    <Input
+                      id="firstName"
+                      type="text"
+                      value={profileFirstName}
+                      onChange={(e) => setProfileFirstName(e.target.value)}
+                      className="bg-white border-gray-300 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName" className="text-gray-700">
+                      Last Name
+                    </Label>
+                    <Input
+                      id="lastName"
+                      type="text"
+                      value={profileLastName}
+                      onChange={(e) => setProfileLastName(e.target.value)}
+                      className="bg-white border-gray-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-gray-700">
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    className="bg-white border-gray-300 rounded-xl"
+                  />
+                </div>
+
+                <Button 
+                  onClick={handleProfileUpdate}
+                  disabled={profileLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                >
+                  {profileLoading ? 'Updating...' : 'Update Profile'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Password Change */}
+          <div>
+            <Card className="bg-white border border-gray-200 shadow-md rounded-3xl">
+              <CardHeader>
+                <CardTitle className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                  <Lock className="h-6 w-6 text-blue-600" />
+                  Change Password
+                </CardTitle>
+                <CardDescription className="text-gray-600">
+                  Update your account password
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {passwordError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
+                    {passwordError}
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-600 text-sm">
+                    {passwordSuccess}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="oldPassword" className="text-gray-700">
+                    Current Password
+                  </Label>
+                  <Input
+                    id="oldPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    value={oldPassword}
+                    onChange={(e) => setOldPassword(e.target.value)}
+                    className="bg-white border-gray-300 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword" className="text-gray-700">
+                    New Password
+                  </Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="bg-white border-gray-300 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword" className="text-gray-700">
+                    Confirm New Password
+                  </Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={`bg-white border-gray-300 rounded-xl ${
+                      confirmPassword && newPassword && confirmPassword !== newPassword
+                        ? 'border-red-500'
+                        : confirmPassword && newPassword && confirmPassword === newPassword
+                        ? 'border-green-500'
+                        : ''
+                    }`}
+                  />
+                  {confirmPassword && newPassword && confirmPassword !== newPassword && (
+                    <p className="text-sm text-red-500">Passwords do not match</p>
+                  )}
+                  {confirmPassword && newPassword && confirmPassword === newPassword && (
+                    <p className="text-sm text-green-600">Passwords match</p>
+                  )}
+                </div>
+
+                <Button 
+                  onClick={handlePasswordChange}
+                  disabled={passwordLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                >
+                  {passwordLoading ? 'Changing...' : 'Change Password'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
           <div>
             <Card
               className="bg-white border border-gray-200 shadow-md rounded-3xl"

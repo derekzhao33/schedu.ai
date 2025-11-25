@@ -1,8 +1,9 @@
 import React, { useState, createContext, useContext } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Separator } from './ui/separator';
+import { useAuth } from '../context/AuthContext';
 import {
   Calendar,
   LayoutDashboard,
@@ -13,6 +14,7 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 
 // Create a context for sidebar state
@@ -39,6 +41,13 @@ export function SidebarProvider({ children }) {
 export default function Sidebar() {
   const { isCollapsed, setIsCollapsed } = useSidebar();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -53,8 +62,8 @@ export default function Sidebar() {
     return (
       <Link to={to}>
         <div
-          className={`text-gray-800 hover:text-black hover:bg-white/40 px-4 py-2 rounded-lg transition cursor-pointer flex items-center gap-3 ${
-            isActive ? 'bg-white/50 text-black font-semibold' : ''
+          className={`text-slate-600 hover:text-slate-900 hover:bg-blue-50/60 px-4 py-2 rounded-lg transition-colors duration-200 cursor-pointer flex items-center gap-3 ${
+            isActive ? 'bg-blue-100 text-blue-900 font-semibold' : ''
           } ${isCollapsed ? 'justify-center' : ''}`}
         >
           <Icon className="h-5 w-5 flex-shrink-0" />
@@ -68,12 +77,12 @@ export default function Sidebar() {
     <aside
       className={`${
         isCollapsed ? 'w-20' : 'w-64'
-      } p-6 shadow-xl hidden md:flex flex-col transition-all duration-300 bg-gradient-to-b from-purple-100 to-blue-100 fixed left-0 top-0 h-screen z-50`}
+      } p-6 shadow-lg hidden md:flex flex-col transition-all duration-300 bg-white border-r border-slate-200 fixed left-0 top-0 h-screen z-50`}
     >
       {/* Header with collapse button */} 
       <div className={`flex items-center mb-6 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
         {!isCollapsed && (
-          <h2 className="text-xl font-bold text-purple-800">
+          <h2 className="text-2xl font-bold text-slate-900">
             Flowify
           </h2>
         )}
@@ -81,7 +90,7 @@ export default function Sidebar() {
           variant="ghost"
           size="icon"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="text-gray-800 hover:text-black hover:bg-gray-200/30"
+          className="text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
         >
           {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </Button>
@@ -98,7 +107,7 @@ export default function Sidebar() {
 
       {/* Bottom Section */}
       <div className="space-y-3 mt-6">
-        <Separator className="bg-gray-300/50" />
+        <Separator className="bg-slate-200" />
 
         {/* Settings Button */}
         <Link to="/settings">
@@ -106,8 +115,8 @@ export default function Sidebar() {
             variant="ghost"
             className={`w-full ${
               isCollapsed ? 'justify-center' : 'justify-start'
-            } text-gray-800 hover:text-black hover:bg-white/40 gap-3 ${
-              location.pathname === '/settings' ? 'bg-white/50 text-black font-semibold' : ''
+            } text-slate-600 hover:text-slate-900 hover:bg-blue-50/60 gap-3 transition-colors duration-200 ${
+              location.pathname === '/settings' ? 'bg-blue-100 text-blue-900 font-semibold' : ''
             }`}
           >
             <SettingsIcon className="h-5 w-5 flex-shrink-0" />
@@ -118,24 +127,37 @@ export default function Sidebar() {
         {/* User Profile */}
         <Link to="/profile">
           <div
-            className={`flex items-center gap-3 p-3 rounded-lg hover:bg-white/40 cursor-pointer transition ${
+            className={`flex items-center gap-3 p-3 rounded-lg hover:bg-blue-50/60 cursor-pointer transition-colors duration-200 ${
               isCollapsed ? 'justify-center' : ''
-            } ${location.pathname === '/profile' ? 'bg-white/50' : ''}`}
+            } ${location.pathname === '/profile' ? 'bg-blue-100 text-slate-900' : ''}`}
           >
             <Avatar className="h-8 w-8 flex-shrink-0">
               <AvatarImage src="" alt="User" />
-              <AvatarFallback className="bg-purple-500 text-white">
-                <User className="h-4 w-4" />
+              <AvatarFallback className="bg-blue-500 text-white">
+                {user ? `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase() : 'U'}
               </AvatarFallback>
             </Avatar>
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">John Doe</p>
-                <p className="text-xs text-gray-700 truncate">john@example.com</p>
+                <p className="text-sm font-medium text-slate-900 truncate">
+                  {user ? `${user.first_name} ${user.last_name}` : 'User'}
+                </p>
               </div>
             )}
           </div>
         </Link>
+
+        {/* Logout Button */}
+        <Button
+          onClick={handleLogout}
+          variant="ghost"
+          className={`w-full ${
+            isCollapsed ? 'justify-center' : 'justify-start'
+          } text-slate-600 hover:text-red-600 hover:bg-red-50/60 gap-3 transition-colors duration-200`}
+        >
+          <LogOut className="h-5 w-5 flex-shrink-0" />
+          {!isCollapsed && <span>Logout</span>}
+        </Button>
       </div>
     </aside>
   );

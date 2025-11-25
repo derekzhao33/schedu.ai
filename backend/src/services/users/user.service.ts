@@ -14,6 +14,18 @@ export async function getUser(
     return result;
 }
 
+export async function getUserByEmail(
+    email: string, 
+): Promise<User | null> {
+    const result: User | null =  await prisma.user.findUnique({
+        where: {
+            email,
+        }
+    });
+
+    return result;
+}
+
 export async function getAllTasksForUser(
     userId: number,
 ): Promise<Task[] | null> {

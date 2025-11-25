@@ -6,7 +6,8 @@
       "Bash(npm run dev:*)",
       "Bash(curl:*)",
       "Bash(timeout /t 3)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(touch:*)"
     ],
     "deny": [],
     "ask": []

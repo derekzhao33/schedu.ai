@@ -1,245 +1,32 @@
 import React, { useState, useEffect } from "react";
-import { useSchedule } from "../context/ScheduleContext";
-import { useModal } from "../context/ModalContext";
-import { useThemeSettings } from "../context/ThemeContext";
-import { useGoogleCalendar } from "../hooks/useGoogleCalendar";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { useSchedule } from "../../context/ScheduleContext";
+import { useModal } from "../../context/ModalContext";
+import { useThemeSettings } from "../../context/ThemeContext";
+import { useGoogleCalendar } from "../../hooks/useGoogleCalendar";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { motion } from "framer-motion";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isSameWeek, isSameMonth, parseISO, setHours, setMinutes, getHours, getMinutes } from "date-fns";
 import { CalendarIcon, MicIcon, CheckCircle2, RefreshCw } from "lucide-react";
-import AddTaskModal from "../components/AddTaskModal";
-import TaskDetailsModal from "../components/TaskDetailsModal";
-import Sidebar, { useSidebar } from "../components/Sidebar";
-
-const PRIMARY_BG = "#f9fafb";
-const PRIMARY_DARK = "#1f2937";
-const PRIMARY_LIGHT = "#ffffff";
-const BORDER_COLOR = "#e5e7eb";
-const TIME_START = 0; // midnight
-const TIME_END = 24; // 24 hours (will show up to 11:59pm)
-const TIME_INTERVAL = 1; // 1 hour
-
-const VIEW_OPTIONS = ["Day", "Week", "Month"];
-
-const PASTEL_COLORS = {
-  red: "#fee2e2",
-  blue: "#dbeafe",
-  yellow: "#fef3c7",
-  orange: "#fed7aa",
-  green: "#dcfce7",
-  purple: "#e9d5ff",
-};
-
-// Add CSS animation keyframes
-const styles = `
-  @keyframes liquify {
-    0%, 100% {
-      border-radius: 50px;
-      box-shadow: 0 8px 32px rgba(236, 72, 153, 0.25), 0 0 60px rgba(168, 85, 247, 0.15), inset 0 2px 10px rgba(255,255,255,0.8);
-    }
-    25% {
-      border-radius: 45px 55px 50px 48px;
-      box-shadow: 0 10px 35px rgba(168, 85, 247, 0.3), 0 0 70px rgba(236, 72, 153, 0.2), inset 0 2px 12px rgba(255,255,255,0.9);
-    }
-    50% {
-      border-radius: 52px 48px 53px 47px;
-      box-shadow: 0 12px 38px rgba(59, 130, 246, 0.25), 0 0 65px rgba(16, 185, 129, 0.18), inset 0 3px 15px rgba(255,255,255,0.85);
-    }
-    75% {
-      border-radius: 48px 52px 46px 54px;
-      box-shadow: 0 9px 30px rgba(16, 185, 129, 0.22), 0 0 68px rgba(59, 130, 246, 0.2), inset 0 2px 11px rgba(255,255,255,0.9);
-    }
-  }
-
-  @keyframes liquify-day {
-    0%, 100% {
-      border-radius: 24px;
-      box-shadow: 0 8px 24px rgba(236, 72, 153, 0.2), 0 0 40px rgba(168, 85, 247, 0.1), inset 0 1px 8px rgba(255,255,255,0.6);
-    }
-    25% {
-      border-radius: 20px 28px 24px 22px;
-      box-shadow: 0 10px 28px rgba(168, 85, 247, 0.25), 0 0 50px rgba(236, 72, 153, 0.15), inset 0 1px 10px rgba(255,255,255,0.7);
-    }
-    50% {
-      border-radius: 26px 22px 25px 21px;
-      box-shadow: 0 12px 32px rgba(59, 130, 246, 0.2), 0 0 45px rgba(16, 185, 129, 0.12), inset 0 2px 12px rgba(255,255,255,0.65);
-    }
-    75% {
-      border-radius: 22px 26px 20px 28px;
-      box-shadow: 0 9px 26px rgba(16, 185, 129, 0.18), 0 0 48px rgba(59, 130, 246, 0.15), inset 0 1px 9px rgba(255,255,255,0.7);
-    }
-  }
-
-  @keyframes liquify-week {
-    0%, 100% {
-      border-radius: 32px;
-    }
-    25% {
-      border-radius: 28px 36px 32px 30px;
-    }
-    50% {
-      border-radius: 34px 30px 33px 29px;
-    }
-    75% {
-      border-radius: 30px 34px 28px 36px;
-    }
-  }
-
-`;
+import AddTaskModal from "../../components/AddTaskModal";
+import TaskDetailsModal from "../../components/TaskDetailsModal";
+import Sidebar, { useSidebar } from "../../components/Sidebar";
+import { 
+  PRIMARY_BG, PRIMARY_DARK, PRIMARY_LIGHT, BORDER_COLOR, 
+  TIME_START, TIME_END, TIME_INTERVAL, VIEW_OPTIONS, 
+  PASTEL_COLORS, CALENDAR_STYLES 
+} from "./constants";
+import {
+  getEventStyle, getTaskStyle, getTimeline, getTasksForDay,
+  getWeekEvents, getMonthEvents, getTasksAtPosition, parseTaskInput
+} from "./utils";
 
 // Inject styles
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement("style");
-  styleSheet.innerText = styles;
+  styleSheet.innerText = CALENDAR_STYLES;
   document.head.appendChild(styleSheet);
-}
-
-// Basic event style calculation for vertical positioning
-function getEventStyle(event) {
-  if (!event.startTime || !event.endTime) return {};
-  const startHour = parseInt(event.startTime.split(":")[0], 10);
-  const startMin = parseInt(event.startTime.split(":")[1], 10);
-  const endHour = parseInt(event.endTime.split(":")[0], 10);
-  const endMin = parseInt(event.endTime.split(":")[1], 10);
-  const top = (startHour * 60 + startMin) * (60 / 60); // 60px per hour slot in day view
-  const height = ((endHour * 60 + endMin) - (startHour * 60 + startMin)) * (60 / 60);
-  // Ensure height is at least 30px but not more than the slot minus 2px padding
-  const maxHeight = Math.max(height - 2, 30);
-  return {
-    top: top + 1, // 1px from top border
-    height: Math.min(height - 2, maxHeight), // Leave 1px from bottom
-  };
-}
-
-// Task style calculation for vertical positioning
-function getTaskStyle(task) {
-  if (!task.startTime || !task.endTime) return {};
-  const startHour = parseInt(task.startTime.split(":")[0], 10);
-  const startMin = parseInt(task.startTime.split(":")[1], 10);
-  const endHour = parseInt(task.endTime.split(":")[0], 10);
-  const endMin = parseInt(task.endTime.split(":")[1], 10);
-  const top = (startHour * 60 + startMin) * (60 / 60); // 60px per hour slot in day view
-  const height = ((endHour * 60 + endMin) - (startHour * 60 + startMin)) * (60 / 60);
-  const maxHeight = Math.max(height - 2, 30);
-  return {
-    top: top + 1,
-    height: Math.min(height - 2, maxHeight),
-  };
-}
-
-function getTimeline(events, date) {
-  // Filter events for the day and sort by start time
-  return events
-    .filter(e => isSameDay(parseISO(e.date), date))
-    .sort((a, b) => (a.startTime || "00:00").localeCompare(b.startTime || "00:00"));
-}
-
-function getTasksForDay(tasks, date) {
-  return tasks
-    .filter(t => t.date && isSameDay(parseISO(t.date), date))
-    .sort((a, b) => (a.startTime || "00:00").localeCompare(b.startTime || "00:00"));
-}
-
-function getWeekEvents(events, date) {
-  return events.filter(e => isSameWeek(parseISO(e.date), date, { weekStartsOn: 0 }));
-}
-
-function getMonthEvents(events, date) {
-  return events.filter(e => isSameMonth(parseISO(e.date), date));
-}
-
-// Check if tasks overlap at a specific time
-function getTasksAtPosition(tasks, top) {
-  return tasks.filter(task => {
-    const style = getTaskStyle(task);
-    return style.top <= top && (style.top + style.height) > top;
-  });
-}
-
-// Parse natural language input to extract task details
-function parseTaskInput(input) {
-  const task = {
-    name: "",
-    label: "",
-    startTime: "",
-    endTime: "",
-    priority: "medium",
-    color: Object.keys(PASTEL_COLORS)[Math.floor(Math.random() * 6)],
-    date: format(new Date(), "yyyy-MM-dd"),
-  };
-
-  // Extract time patterns like "at 2pm", "from 2pm to 4pm", "2-4pm", "14:00-16:00"
-  const timePatterns = [
-    /(?:from\s+)?(\d{1,2})(?::(\d{2}))?\s*([ap]m)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*([ap]m)?/i,
-    /at\s+(\d{1,2})(?::(\d{2}))?\s*([ap]m)?/i,
-  ];
-
-  let timeMatch = null;
-  for (const pattern of timePatterns) {
-    timeMatch = input.match(pattern);
-    if (timeMatch) break;
-  }
-
-  if (timeMatch) {
-    if (timeMatch[4]) {
-      // Range pattern (from X to Y)
-      let startHour = parseInt(timeMatch[1]);
-      const startMin = timeMatch[2] || "00";
-      let endHour = parseInt(timeMatch[4]);
-      const endMin = timeMatch[5] || "00";
-
-      // Handle AM/PM
-      if (timeMatch[3]?.toLowerCase() === 'pm' && startHour < 12) startHour += 12;
-      if (timeMatch[3]?.toLowerCase() === 'am' && startHour === 12) startHour = 0;
-      if (timeMatch[6]?.toLowerCase() === 'pm' && endHour < 12) endHour += 12;
-      if (timeMatch[6]?.toLowerCase() === 'am' && endHour === 12) endHour = 0;
-
-      task.startTime = `${String(startHour).padStart(2, '0')}:${startMin}`;
-      task.endTime = `${String(endHour).padStart(2, '0')}:${endMin}`;
-    } else {
-      // Single time pattern (at X)
-      let hour = parseInt(timeMatch[1]);
-      const min = timeMatch[2] || "00";
-
-      if (timeMatch[3]?.toLowerCase() === 'pm' && hour < 12) hour += 12;
-      if (timeMatch[3]?.toLowerCase() === 'am' && hour === 12) hour = 0;
-
-      task.startTime = `${String(hour).padStart(2, '0')}:${min}`;
-      task.endTime = `${String(hour + 1).padStart(2, '0')}:${min}`;
-    }
-
-    // Remove time from task name
-    input = input.replace(timeMatch[0], '').trim();
-  }
-
-  // Extract priority keywords
-  const priorityPatterns = [
-    { regex: /\b(urgent|high priority|important|critical)\b/i, priority: 'high' },
-    { regex: /\b(medium priority|normal)\b/i, priority: 'medium' },
-    { regex: /\b(low priority|minor|later)\b/i, priority: 'low' },
-  ];
-
-  for (const { regex, priority } of priorityPatterns) {
-    if (regex.test(input)) {
-      task.priority = priority;
-      input = input.replace(regex, '').trim();
-      break;
-    }
-  }
-
-  // Extract label/type if present
-  const labelMatch = input.match(/\[([^\]]+)\]/);
-  if (labelMatch) {
-    task.label = labelMatch[1];
-    input = input.replace(labelMatch[0], '').trim();
-  }
-
-  // What's left is the task name
-  task.name = input.trim() || "New Task";
-
-  return task;
 }
 
 export default function Calender() {
@@ -401,18 +188,18 @@ export default function Calender() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     const hours = Array.from({ length: TIME_END - TIME_START }, (_, i) => TIME_START + i);
     return (
-      <div className="overflow-x-auto mt-4 flex-1 px-4">
-        <div className="flex flex-row w-full h-full max-w-[1600px] mx-auto">
+      <div className="overflow-x-auto mt-4 flex-1">
+        <div className="flex flex-row w-full h-full">
           {/* Time column */}
-          <div className="flex flex-col pr-2" style={{width: 70, marginRight: 12, height: '100%', marginTop: 23}}>
+          <div className="flex flex-col pr-2" style={{width: 56, marginRight: 8, height: '100%', marginTop: 23}}>
             {hours.map(h => (
-              <div key={h} className="flex items-center justify-end text-sm text-slate-500 font-medium" style={{height: 40, minHeight: 40, paddingRight: 8}}>
+              <div key={h} className="flex items-center justify-end text-xs text-slate-500" style={{height: 40, minHeight: 40, paddingRight: 4}}>
                 {format(setHours(new Date(), h), "h a")}
               </div>
             ))}
           </div>
           {/* Days columns */}
-          <div className="flex-1 grid grid-cols-7 gap-3 h-full">
+          <div className="flex-1 grid grid-cols-7 gap-2 h-full">
             {days.map((day, dayIdx) => {
               const dayEvents = getTimeline(allEvents, day);
               const dayTasks = getTasksForDay(tasks, day);
@@ -492,8 +279,8 @@ export default function Calender() {
     const today = new Date();
     // 6 rows for full month, 7 columns for days
     return (
-      <div className="flex-1 overflow-y-auto px-4">
-        <div className="grid grid-cols-7 gap-4 mt-4 min-h-[calc(100vh-220px)] max-w-[1600px] mx-auto" style={{alignItems: 'stretch'}}>
+      <div className="flex-1 overflow-y-auto">
+        <div className="grid grid-cols-7 gap-2 mt-4 min-h-[calc(100vh-220px)]" style={{alignItems: 'stretch'}}>
           {days.map((d, i) => {
             const dayTasks = getTasksForDay(tasks, d);
             const dayEvents = getTimeline(allEvents, d);
@@ -502,12 +289,12 @@ export default function Calender() {
             return (
               <div
                 key={i}
-                className="rounded-3xl p-5 transition-all flex flex-col justify-start"
+                className="rounded-3xl p-4 transition-all flex flex-col justify-start"
                 style={{
                   background: isCurrentMonth ? '#f8f9fa' : '#e9ecef',
                   border: isToday ? '2px solid #6c757d' : '1px solid #dee2e6',
                   opacity: isCurrentMonth ? 1 : 0.5,
-                  minHeight: 150,
+                  minHeight: 120,
                   boxShadow: isToday ? '0 4px 12px rgba(108, 117, 125, 0.3)' : '0 2px 4px rgba(0, 0, 0, 0.05)',
                   transition: 'all 0.3s ease',
                   cursor: 'default',
@@ -527,7 +314,7 @@ export default function Calender() {
                   }
                 }}
               >
-                <div className="font-bold mb-3 text-lg" style={{
+                <div className="font-bold mb-2" style={{
                   color: isToday ? '#3B82F6' : '#495057',
                   textShadow: isToday ? '0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.4)' : 'none'
                 }}>{format(d, "d")}</div>
@@ -699,113 +486,116 @@ export default function Calender() {
         transition={{ duration: 0.4 }}
       >
         {view === "Day" && (
-          <div className="mt-4 flex flex-col flex-1 min-h-0 overflow-hidden px-4" style={{ background: 'transparent', minHeight: 0 }}>
-            <div className="text-xl font-bold mb-4 max-w-[1600px] mx-auto w-full" style={{ color: '#374151' }}>Timeline</div>
-            <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
-              <div className="flex flex-row max-w-[1600px] mx-auto w-full">
-                {/* Time labels outside white area */}
-                <div className="flex flex-col pr-2 flex-shrink-0" style={{width: 70, marginRight: 12}}>
-                  {Array.from({ length: TIME_END - TIME_START }, (_, i) => TIME_START + i).map(h => (
-                    <div key={h} className="flex items-center justify-end text-sm text-slate-500 font-medium" style={{height: 60, minHeight: 60, paddingRight: 8}}>
-                      {format(setHours(new Date(), h), "h a")}
-                    </div>
-                  ))}
-                </div>
-                {/* Timeline slots and events inside white area */}
-                <div className="relative flex-1 flex flex-col rounded-3xl shadow-xl border" style={{ background: PRIMARY_LIGHT, border: `1px solid ${BORDER_COLOR}`, minHeight: 1440, height: 1440, animation: 'liquify-day 4s ease-in-out infinite' }}>
-                  {/* Time slots */}
-                  <div className="flex flex-col" style={{height: 1440}}>
-                    {Array.from({ length: TIME_END - TIME_START }, (_, i) => (
-                      <div key={i} className="border-b" style={{height: 60, minHeight: 60, borderColor: BORDER_COLOR, borderBottomWidth: 1, borderStyle: 'solid'}}></div>
+          <div className="rounded-3xl shadow-xl p-6 mt-4 flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: 'transparent', minHeight: 0 }}>
+            <div className="text-xl font-bold mb-4" style={{ color: '#374151' }}>Timeline</div>
+            <div className="flex-1 min-h-0 flex flex-col h-full" style={{ position: 'relative', minHeight: 0, height: 'calc(100vh - 220px)' }}>
+              <div className="flex-1 min-h-0 flex flex-col h-full" style={{height: '100%'}}>
+                <div className="flex flex-1 h-full min-h-0 overflow-y-auto" style={{height: '100%'}}>
+                  {/* Time labels outside white area */}
+                  <div className="flex flex-col pr-2 flex-shrink-0" style={{width: 60, marginRight: 12, marginTop: -16}}>
+                    {Array.from({ length: TIME_END - TIME_START }, (_, i) => TIME_START + i).map(h => (
+                      <div key={h} className="flex items-center justify-end text-xs text-slate-500" style={{height: 80, minHeight: 80, paddingRight: 8}}>
+                        {format(setHours(new Date(), h), "h a")}
+                      </div>
                     ))}
                   </div>
-                  {/* Events */}
-                  {timeline.map((event, i) => {
-                    const style = getEventStyle(event);
-                    const isGoogleEvent = event.source === 'google-calendar';
-                    return (
-                      <div
-                        key={i}
-                        className="absolute left-2 right-2 bg-white rounded-xl p-4 flex flex-row items-center gap-2 border"
-                        style={{
-                          ...style,
-                          minHeight: 24,
-                          zIndex: 2,
-                          boxShadow: 'none',
-                          overflow: 'visible',
-                          borderColor: isGoogleEvent ? '#fc8181' : '#adb5bd',
-                          background: isGoogleEvent ? '#fff5f5' : '#fff'
-                        }}
-                      >
-                        {isGoogleEvent && (
-                          <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">Google</span>
-                        )}
-                        <div className="font-semibold text-slate-800 whitespace-nowrap">{event.name}</div>
-                        <div className="text-xs text-slate-600 whitespace-normal break-words flex-1">{event.description}</div>
-                      </div>
-                    );
-                  })}
-                  {/* Tasks */}
-                  {todaysTasks.map((task, i) => {
-                    const style = getTaskStyle(task);
-                    const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
-                    const taskIndex = tasks.indexOf(task);
-                    return (
-                      <div
-                        key={`task-${i}`}
-                        className="absolute left-2 right-2 rounded-xl p-3 flex flex-row items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md group"
-                        style={{
-                          ...style,
-                          minHeight: 24,
-                          zIndex: 3,
-                          backgroundColor: taskColor,
-                          border: `2px solid ${taskColor}`,
-                          overflow: 'visible',
-                          opacity: task.completed ? 0 : 1,
-                          filter: task.completed ? 'blur(4px)' : 'blur(0px)',
-                          transform: task.completed ? 'scale(0.95)' : 'scale(1)',
-                          transition: 'opacity 1.5s ease-out, transform 1.5s ease-out, filter 1.5s ease-out'
-                        }}
-                        onClick={(e) => {
-                          if (!task.completed) {
-                            const isCompleteButton = e.target.closest('button');
-                            if (!isCompleteButton) {
-                              openTaskDetailsModal(task, taskIndex);
-                            }
-                          }
-                        }}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="p-1 h-auto hover:bg-white/30 transition-all opacity-0 group-hover:opacity-100"
+                  {/* Timeline slots and events inside white area */}
+                  <div className="relative flex-1 min-h-0 flex flex-col rounded-2xl shadow-xl border" style={{ background: PRIMARY_LIGHT, border: `1px solid ${BORDER_COLOR}`, minHeight: 'calc(100vh - 240px)', animation: 'liquify-day 4s ease-in-out infinite' }}>
+                    {/* Time slots */}
+                    <div className="flex-1 flex flex-col justify-between">
+                      {Array.from({ length: TIME_END - TIME_START }, (_, i) => (
+                        <div key={i} className="border-b" style={{height: 80, minHeight: 80, borderColor: BORDER_COLOR, borderBottomWidth: 1, borderStyle: 'solid'}}></div>
+                      ))}
+                    </div>
+                    {/* Events */}
+                    {timeline.map((event, i) => {
+                      const style = getEventStyle(event);
+                      const isGoogleEvent = event.source === 'google-calendar';
+                      return (
+                        <div
+                          key={i}
+                          className="absolute left-2 right-2 bg-white rounded-xl p-4 flex flex-row items-center gap-2 border"
+                          style={{
+                            ...style,
+                            minHeight: 24,
+                            zIndex: 2,
+                            boxShadow: 'none',
+                            overflow: 'visible',
+                            borderColor: isGoogleEvent ? '#fc8181' : '#adb5bd',
+                            background: isGoogleEvent ? '#fff5f5' : '#fff'
+                          }}
+                        >
+                          {isGoogleEvent && (
+                            <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">Google</span>
+                          )}
+                          <div className="font-semibold text-slate-800 whitespace-nowrap">{event.name}</div>
+                          <div className="text-xs text-slate-600 whitespace-normal break-words flex-1">{event.description}</div>
+                        </div>
+                      );
+                    })}
+                    {/* Tasks */}
+                    {todaysTasks.map((task, i) => {
+                      const style = getTaskStyle(task);
+                      const taskColor = PASTEL_COLORS[task.color] || PASTEL_COLORS.blue;
+                      const taskIndex = tasks.indexOf(task);
+                      return (
+                        <div
+                          key={`task-${i}`}
+                          className="absolute left-2 right-2 rounded-xl p-3 flex flex-row items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md group"
+                          style={{
+                            ...style,
+                            minHeight: 24,
+                            zIndex: 3,
+                            backgroundColor: taskColor,
+                            border: `2px solid ${taskColor}`,
+                            overflow: 'visible',
+                            opacity: task.completed ? 0 : 1,
+                            filter: task.completed ? 'blur(4px)' : 'blur(0px)',
+                            transform: task.completed ? 'scale(0.95)' : 'scale(1)',
+                            transition: 'opacity 1.5s ease-out, transform 1.5s ease-out, filter 1.5s ease-out'
+                          }}
                           onClick={(e) => {
-                            e.stopPropagation();
                             if (!task.completed) {
-                              completeTask(taskIndex);
+                              // Check if click is on the complete button area (left side)
+                              const isCompleteButton = e.target.closest('button');
+                              if (!isCompleteButton) {
+                                openTaskDetailsModal(task, taskIndex);
+                              }
                             }
                           }}
-                          style={{ cursor: 'pointer' }}
-                          disabled={task.completed}
                         >
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        </Button>
-                        <div className={`font-semibold text-slate-800 whitespace-nowrap ${task.completed ? 'line-through' : ''}`} style={{ textDecorationThickness: '2px' }}>{task.name}</div>
-                        {task.label && (
-                          <span className={`text-xs bg-white/50 text-slate-700 rounded px-2 py-0.5 ${task.completed ? 'line-through' : ''}`}>
-                            {task.label}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="p-1 h-auto hover:bg-white/30 transition-all opacity-0 group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!task.completed) {
+                                completeTask(taskIndex);
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
+                            disabled={task.completed}
+                          >
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <div className={`font-semibold text-slate-800 whitespace-nowrap ${task.completed ? 'line-through' : ''}`} style={{ textDecorationThickness: '2px' }}>{task.name}</div>
+                          {task.label && (
+                            <span className={`text-xs bg-white/50 text-slate-700 rounded px-2 py-0.5 ${task.completed ? 'line-through' : ''}`}>
+                              {task.label}
+                            </span>
+                          )}
+                          <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded ${
+                            task.priority === 'high' ? 'bg-red-200 text-red-800' :
+                            task.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
+                            'bg-green-200 text-green-800'
+                          } ${task.completed ? 'line-through' : ''}`}>
+                            {task.priority}
                           </span>
-                        )}
-                        <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded ${
-                          task.priority === 'high' ? 'bg-red-200 text-red-800' :
-                          task.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                          'bg-green-200 text-green-800'
-                        } ${task.completed ? 'line-through' : ''}`}>
-                          {task.priority}
-                        </span>
-                      </div>
-                    );
-                  })}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>

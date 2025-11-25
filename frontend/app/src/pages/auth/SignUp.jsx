@@ -1,59 +1,62 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '../../context/AuthContext';
+import FlowifyLogo from '../../components/FlowifyLogo';
 
 const SignUp = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [username, setUsername] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [selectedDate, setSelectedDate] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { signup } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSignUp = () => {
-    // Sign up functionality will go here
+  const handleSignUp = async () => {
+    if (!firstName || !lastName || !email || !password || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      await signup(firstName, lastName, email, password);
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Signup failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogin = () => {
-    // Navigate to login page
-  };
-
-  const handleDateSelect = (date) => {
-    setSelectedDate(date);
-    if (date) {
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const year = date.getFullYear();
-      setDateOfBirth(`${month}/${day}/${year}`);
-    }
-  };
-
-  const handleDateInputChange = (e) => {
-    const value = e.target.value;
-    setDateOfBirth(value);
-    
-    // Try to parse the date if it's in a valid format
-    const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-    const match = value.match(dateRegex);
-    if (match) {
-      const [_, month, day, year] = match;
-      const parsedDate = new Date(year, month - 1, day);
-      if (!isNaN(parsedDate.getTime())) {
-        setSelectedDate(parsedDate);
-      }
-    }
+    navigate('/login');
   };
 
   return (
     <div className="flex h-[100vh] w-full">
-      {/* Left Side - Solid Color */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#181D27] items-center justify-center">
+      {/* Left Side - Logo */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-50 to-blue-100 items-center justify-center">
         <div className="text-center">
-          <h1 className="text-6xl font-bold text-white mb-4">Schedu.ai</h1>
-          <p className="text-gray-300 text-lg">Your intelligent scheduling assistant</p>
+          <FlowifyLogo size="lg" />
+          <p className="text-gray-600 text-lg mt-6">Your intelligent scheduling assistant</p>
         </div>
       </div>
 
@@ -61,8 +64,8 @@ const SignUp = () => {
       <div className="w-full lg:w-1/2 flex items-center justify-center bg-white p-8 overflow-y-auto">
         <div className="w-full max-w-md space-y-8 py-8">
           {/* Logo for mobile */}
-          <div className="lg:hidden space-y-2">
-            <h1 className="text-2xl font-bold text-[#181D27]">Schedu.ai</h1>
+          <div className="lg:hidden flex justify-center">
+            <FlowifyLogo size="sm" />
           </div>
 
           {/* Sign Up Form */}
@@ -72,6 +75,11 @@ const SignUp = () => {
             </div>
 
             <div className="space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
+                  {error}
+                </div>
+              )}
               {/* First Name and Last Name */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -101,21 +109,6 @@ const SignUp = () => {
                     className="w-full"
                   />
                 </div>
-              </div>
-
-              {/* Username */}
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm font-medium text-gray-700">
-                  Username
-                </Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="johndoe"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full"
-                />
               </div>
 
               {/* Email */}
@@ -178,9 +171,10 @@ const SignUp = () => {
               {/* Sign Up Button */}
               <Button 
                 onClick={handleSignUp}
-                className="w-full bg-[#181D27] hover:bg-[#2a3142] text-white font-medium py-6 text-base hover:cursor-pointer"
+                disabled={loading}
+                className="w-full bg-[#181D27] hover:bg-[#2a3142] text-white font-medium py-6 text-base hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign up
+                {loading ? 'Creating account...' : 'Sign up'}
               </Button>
 
               {/* Login Link */}

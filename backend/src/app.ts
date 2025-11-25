@@ -6,11 +6,11 @@ dotenv.config();
 
 // Temporarily commented out - requires database setup
 // import taskRoutes from './services/tasks/task.routes'
-// import userRoutes from './services/users/user.routes';
+import userRoutes from './services/users/user.routes.js';
 import googleCalendarRoutes from './services/google-calendar/google-calendar.routes.js';
-import { errorHandler } from './middlewares/errorHandler.js';
+// import { errorHandler } from './middlewares/errorHandler.js';
 
-import assistantRoutes from './services/assistant/assistant.routes.js'
+// import assistantRoutes from './services/assistant/assistant.routes.js'
 
 const app = express();
 
@@ -30,14 +30,14 @@ app.use(express.json());
 // Routes
 // Temporarily disabled - requires database setup
 // app.use('/api/tasks', taskRoutes);
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 
 // Google Calendar routes (works without database)
 app.use('/api/google-calendar', googleCalendarRoutes);
 
-app.use('/api/assistant', assistantRoutes);
+// app.use('/api/assistant', assistantRoutes);
 
 // Global error handler (should be after routes)
-app.use(errorHandler);
+// app.use(errorHandler);
 
 export default app;

@@ -16,19 +16,21 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { useThemeSettings } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import Sidebar, { useSidebar } from '../components/Sidebar';
 import { Camera, Mail, User, Lock, Link2, Crown, Calendar } from 'lucide-react';
 
 const Profile = () => {
   const { theme } = useThemeSettings();
   const { isCollapsed } = useSidebar();
+  const { user, updateProfile } = useAuth();
 
-  // Profile state
-  const [firstName, setFirstName] = useState('John');
-  const [lastName, setLastName] = useState('Doe');
-  const [username, setUsername] = useState('johndoe');
-  const [email, setEmail] = useState('john@example.com');
+  // Profile state - load from user
+  const [firstName, setFirstName] = useState(user?.first_name || '');
+  const [lastName, setLastName] = useState(user?.last_name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [profileImage, setProfileImage] = useState('');
+  const [profileMessage, setProfileMessage] = useState('');
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -40,12 +42,18 @@ const Profile = () => {
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(14);
   const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
 
-  const handleSaveProfile = () => {
-    // Save profile functionality will go here
-  };
-
   const handleChangePassword = () => {
     // Change password functionality will go here
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      await updateProfile(firstName, lastName, email);
+      setProfileMessage('Profile updated successfully!');
+      setTimeout(() => setProfileMessage(''), 3000);
+    } catch (error) {
+      setProfileMessage('Error updating profile: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   const handleImageUpload = (e) => {
@@ -100,7 +108,7 @@ const Profile = () => {
                 <Avatar className="h-24 w-24">
                   <AvatarImage src={profileImage} />
                   <AvatarFallback className="text-2xl bg-gradient-to-r from-[#FF9CA5] to-[#C56C86] text-white">
-                    {firstName[0]}{lastName[0]}
+                    {(firstName?.[0] || '').toUpperCase()}{(lastName?.[0] || '').toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div>
@@ -194,21 +202,6 @@ const Profile = () => {
               </div>
             </div>
 
-            {/* Username */}
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
             {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -224,6 +217,13 @@ const Profile = () => {
                 />
               </div>
             </div>
+
+            {/* Profile Message */}
+            {profileMessage && (
+              <div className={`p-3 rounded-md text-sm ${profileMessage.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                {profileMessage}
+              </div>
+            )}
 
             {/* Save Button */}
             <div className="flex justify-end pt-4">

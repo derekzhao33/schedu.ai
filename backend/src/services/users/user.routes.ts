@@ -2,9 +2,41 @@ import { Router } from 'express';
 import express from 'express';
 import { type User } from "../../generated/prisma/client.js";
 import { type Task } from "../../generated/prisma/client.js";
-import { getUser, createUser, updateUser, getAllTasksForUser, getTaskForUser } from "./user.service.js";
+import { getUser, createUser, updateUser, getAllTasksForUser, getTaskForUser, getUserByEmail } from "./user.service.js";
 
 const router: Router = Router();
+
+router.post(
+    '/login',
+    async (req: express.Request, res: express.Response): Promise<void> => {
+        const { email, password }: {
+            email: string;
+            password: string;
+        } = req.body;
+
+        try {
+            const user: User | null = await getUserByEmail(email);
+            
+            if (!user) {
+                res.status(401).json({ error: 'Invalid email or password' });
+                return;
+            }
+
+            // Simple password comparison (in production, use bcrypt)
+            if (user.password !== password) {
+                res.status(401).json({ error: 'Invalid email or password' });
+                return;
+            }
+
+            // Return user without password
+            const { password: _, ...userWithoutPassword } = user;
+            res.status(200).json(userWithoutPassword);
+        } catch (error) {
+            res.status(400).json({ error: '400: Bad Request' });
+            console.log(error);
+        }
+    }
+);
 
 router.get('/:id', async (req: express.Request, res: express.Response) => {
     const id: number = Number(req.params.id);

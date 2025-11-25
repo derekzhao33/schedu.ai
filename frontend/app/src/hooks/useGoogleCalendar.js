@@ -25,14 +25,24 @@ export function useGoogleCalendar() {
   const connectGoogleCalendar = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const response = await fetch(`${API_BASE_URL}/auth/url`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to get authentication URL');
+      }
+      
       const data = await response.json();
+      
+      if (!data.authUrl) {
+        throw new Error('No authentication URL received');
+      }
 
-      // Open Google OAuth in a popup or redirect
+      // Redirect to Google OAuth
       window.location.href = data.authUrl;
     } catch (err) {
       console.error('Error connecting to Google Calendar:', err);
-      setError('Failed to connect to Google Calendar');
+      setError(err.message || 'Failed to connect to Google Calendar');
     } finally {
       setIsLoading(false);
     }
