@@ -7,7 +7,8 @@
       "Bash(curl:*)",
       "Bash(timeout /t 3)",
       "Bash(npm run:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

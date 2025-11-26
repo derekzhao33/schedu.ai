@@ -2,16 +2,16 @@ import { format, isSameDay, isSameWeek, isSameMonth, parseISO } from "date-fns";
 import { PASTEL_COLORS } from "./constants";
 
 // Basic event style calculation for vertical positioning
-export function getEventStyle(event) {
+export function getEventStyle(event, slotHeight = 48) {
   if (!event.startTime || !event.endTime) return {};
   const startHour = parseInt(event.startTime.split(":")[0], 10);
   const startMin = parseInt(event.startTime.split(":")[1], 10);
   const endHour = parseInt(event.endTime.split(":")[0], 10);
   const endMin = parseInt(event.endTime.split(":")[1], 10);
-  const top = (startHour * 60 + startMin) * (60 / 60); // 60px per hour slot in day view
-  const height = ((endHour * 60 + endMin) - (startHour * 60 + startMin)) * (60 / 60);
-  // Ensure height is at least 30px but not more than the slot minus 2px padding
-  const maxHeight = Math.max(height - 2, 30);
+  const top = (startHour * 60 + startMin) * (slotHeight / 60);
+  const height = ((endHour * 60 + endMin) - (startHour * 60 + startMin)) * (slotHeight / 60);
+  // Ensure height is at least 24px but not more than the slot minus 2px padding
+  const maxHeight = Math.max(height - 2, 24);
   return {
     top: top + 1, // 1px from top border
     height: Math.min(height - 2, maxHeight), // Leave 1px from bottom
@@ -19,15 +19,15 @@ export function getEventStyle(event) {
 }
 
 // Task style calculation for vertical positioning
-export function getTaskStyle(task) {
+export function getTaskStyle(task, slotHeight = 48) {
   if (!task.startTime || !task.endTime) return {};
   const startHour = parseInt(task.startTime.split(":")[0], 10);
   const startMin = parseInt(task.startTime.split(":")[1], 10);
   const endHour = parseInt(task.endTime.split(":")[0], 10);
   const endMin = parseInt(task.endTime.split(":")[1], 10);
-  const top = (startHour * 60 + startMin) * (60 / 60); // 60px per hour slot in day view
-  const height = ((endHour * 60 + endMin) - (startHour * 60 + startMin)) * (60 / 60);
-  const maxHeight = Math.max(height - 2, 30);
+  const top = (startHour * 60 + startMin) * (slotHeight / 60);
+  const height = ((endHour * 60 + endMin) - (startHour * 60 + startMin)) * (slotHeight / 60);
+  const maxHeight = Math.max(height - 2, 24);
   return {
     top: top + 1,
     height: Math.min(height - 2, maxHeight),

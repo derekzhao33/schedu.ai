@@ -12,15 +12,16 @@
     "dev": "tsx watch ./src/server.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.25.1",
     "@prisma/adapter-pg": "^7.0.0",
     "@prisma/client": "^7.0.0",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-list-endpoints": "^7.1.1",
-    "googleapis": "^166.0.0",
-    "openai": "^6.9.1"
+    "googleapis": "^166.0.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

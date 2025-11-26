@@ -8,7 +8,6 @@ import {
   Calendar,
   LayoutDashboard,
   ListTodo,
-  Bot,
   BarChart3,
   Settings as SettingsIcon,
   User,
@@ -53,7 +52,6 @@ export default function Sidebar() {
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/calendar', icon: Calendar, label: 'Calendar' },
     { to: '/tasks', icon: ListTodo, label: 'Tasks' },
-    { to: '/assistant', icon: Bot, label: 'Assistant' },
     { to: '/stats', icon: BarChart3, label: 'Stats' },
   ];
 

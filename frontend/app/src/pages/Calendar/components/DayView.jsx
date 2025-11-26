@@ -16,24 +16,24 @@ export default function DayView({
   const todaysTasks = getTasksForDay(tasks, selectedDate);
 
   return (
-    <div className="mt-4 flex flex-col flex-1 min-h-0 overflow-hidden px-4" style={{ background: 'transparent', minHeight: 0 }}>
-      <div className="text-xl font-bold mb-4 max-w-[1600px] mx-auto w-full" style={{ color: '#374151' }}>Timeline</div>
+    <div className="mt-3 flex flex-col flex-1 min-h-0 overflow-hidden px-3" style={{ background: 'transparent', minHeight: 0 }}>
+      <div className="text-base font-semibold mb-2 max-w-full mx-auto w-full" style={{ color: '#374151' }}>Timeline</div>
       <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
-        <div className="flex flex-row max-w-[1600px] mx-auto w-full">
-          {/* Time labels outside white area */}
-          <div className="flex flex-col pr-2 flex-shrink-0" style={{width: 70, marginRight: 12}}>
+        <div className="flex flex-row max-w-full mx-auto w-full gap-0">
+          {/* Time labels */}
+          <div className="flex flex-col flex-shrink-0" style={{width: 50}}>
             {Array.from({ length: TIME_END - TIME_START }, (_, i) => TIME_START + i).map(h => (
-              <div key={h} className="flex items-center justify-end text-sm text-slate-500 font-medium" style={{height: 60, minHeight: 60, paddingRight: 8}}>
+              <div key={h} className="flex items-start justify-end text-xs text-slate-500 font-medium" style={{height: 48, minHeight: 48, paddingRight: 6, paddingTop: 2, lineHeight: 1}}>
                 {format(setHours(new Date(), h), "h a")}
               </div>
             ))}
           </div>
           {/* Timeline slots and events inside white area */}
-          <div className="relative flex-1 flex flex-col rounded-3xl shadow-xl border" style={{ background: PRIMARY_LIGHT, border: `1px solid ${BORDER_COLOR}`, minHeight: 1440, height: 1440, animation: 'liquify-day 4s ease-in-out infinite' }}>
+          <div className="relative flex-1 flex flex-col rounded-xl shadow-sm border ml-2" style={{ background: PRIMARY_LIGHT, border: `1px solid ${BORDER_COLOR}`, minHeight: 1152, height: 1152, animation: 'liquify-day 4s ease-in-out infinite' }}>
             {/* Time slots */}
-            <div className="flex flex-col" style={{height: 1440}}>
+            <div className="flex flex-col" style={{height: 1152}}>
               {Array.from({ length: TIME_END - TIME_START }, (_, i) => (
-                <div key={i} className="border-b" style={{height: 60, minHeight: 60, borderColor: BORDER_COLOR, borderBottomWidth: 1, borderStyle: 'solid'}}></div>
+                <div key={i} className="border-b" style={{height: 48, minHeight: 48, borderColor: BORDER_COLOR, borderBottomWidth: 1, borderStyle: 'solid'}}></div>
               ))}
             </div>
             {/* Events */}

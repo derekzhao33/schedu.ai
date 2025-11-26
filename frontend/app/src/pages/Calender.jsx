@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSchedule } from "../context/ScheduleContext";
 import { useModal } from "../context/ModalContext";
 import { useThemeSettings } from "../context/ThemeContext";
@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { motion } from "framer-motion";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isSameWeek, isSameMonth, parseISO, setHours, setMinutes, getHours, getMinutes } from "date-fns";
-import { CalendarIcon, MicIcon, CheckCircle2, RefreshCw } from "lucide-react";
+import { CalendarIcon, MicIcon, CheckCircle2, RefreshCw, Bot, SendIcon, UserIcon, BotIcon } from "lucide-react";
 import AddTaskModal from "../components/AddTaskModal";
 import TaskDetailsModal from "../components/TaskDetailsModal";
 import Sidebar, { useSidebar } from "../components/Sidebar";
@@ -262,8 +262,9 @@ export default function Calender() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-    const [showAiPanel, setShowAiPanel] = useState(false);
-    const [aiResponse, setAiResponse] = useState(null);
+  const [aiMessages, setAiMessages] = useState([]);
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  const messagesEndRef = useRef(null);
 
   // Check Google Calendar auth status on mount
   useEffect(() => {
@@ -318,22 +319,39 @@ export default function Calender() {
     else if (view === "Month") setSelectedDate(addDays(selectedDate, 30));
   };
 
-  // Handle AI-powered task creation
+  // Auto-scroll to bottom of chat
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [aiMessages, isAiTyping]);
+
+  // Handle AI chat message
   const handleQuickAdd = async () => {
     if (!input.trim()) return;
 
+    const userInput = input;
+    setInput("");
+
+    // Add user message to chat
+    const userMessage = {
+      id: Date.now(),
+      type: "user",
+      content: userInput,
+      timestamp: new Date().toISOString(),
+    };
+    setAiMessages((prev) => [...prev, userMessage]);
+
     setIsProcessing(true);
-    setShowAiPanel(true);
-    setAiResponse(null);
+    setIsAiTyping(true);
+
     try {
-      const response = await fetch('http://localhost:3000/api/assistant/process', {
+      const response = await fetch('http://localhost:3001/api/assistant/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          input: input.trim(),
-          userId: 1, // TODO: Replace with actual user ID from auth context
+          input: userInput,
+          userId: 1,
         }),
       });
 
@@ -343,12 +361,22 @@ export default function Calender() {
         throw new Error(data.error || 'Failed to process request');
       }
 
-      setAiResponse(data);
-      
-      // Add created tasks to local state
+      // Add AI response to chat
+      const aiMessage = {
+        id: Date.now() + 1,
+        type: "assistant",
+        content: data.message,
+        timestamp: new Date().toISOString(),
+        tasks: data.tasks || [],
+        conflicts: data.conflicts,
+        suggestedAlternatives: data.suggestedAlternatives,
+        tasksCreated: data.tasksCreated || 0,
+      };
+      setAiMessages((prev) => [...prev, aiMessage]);
+
+      // Add created tasks to calendar
       if (data.tasks && data.tasks.length > 0) {
         data.tasks.forEach(task => {
-          // Convert backend task format to frontend format
           const frontendTask = {
             name: task.name,
             description: task.description || '',
@@ -356,30 +384,29 @@ export default function Calender() {
             startTime: task.startTime,
             endTime: task.endTime,
             priority: task.priority || 'medium',
-            color: task.color || Object.keys(PASTEL_COLORS)[Math.floor(Math.random() * 6)],
+            color: task.colour || 'blue',
             label: task.label || '',
           };
           addTask(frontendTask);
         });
-      }
-      
-      setInput("");
 
-      // Auto-hide AI panel after 5 seconds if successful
-      if (data.tasksCreated > 0) {
-        setTimeout(() => {
-          setShowAiPanel(false);
-        }, 5000);
+        // Show success notification
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
       }
     } catch (error) {
       console.error('Error processing AI request:', error);
-      setAiResponse({
-        message: error.message || 'Failed to process your request. Please try again.',
+      const errorMessage = {
+        id: Date.now() + 1,
+        type: "assistant",
+        content: error.message || 'Failed to process your request. Please try again.',
+        timestamp: new Date().toISOString(),
         tasksCreated: 0,
-        tasks: [],
-      });
+      };
+      setAiMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsProcessing(false);
+      setIsAiTyping(false);
     }
   };
 
@@ -581,7 +608,9 @@ export default function Calender() {
   return (
     <div className={`flex min-h-screen ${theme === 'dark' ? 'dark' : ''}`} style={{ background: PRIMARY_BG }}>
       <Sidebar />
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`} style={{ height: '100vh', maxHeight: '100vh', overflow: 'hidden' }}>
+      <div className={`flex transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`} style={{ height: '100vh', maxHeight: '100vh', overflow: 'hidden', width: '100%' }}>
+        {/* Left Side: Calendar */}
+        <div className="flex-1 flex flex-col" style={{ maxWidth: 'calc(100% - 400px)' }}>
         {/* Header and View Switcher */}
         <div className="flex justify-between items-center p-6 pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
           <div className="flex items-center gap-3">
@@ -678,6 +707,7 @@ export default function Calender() {
                 Connect Google Calendar
               </Button>
             )}
+
           </div>
         </div>
 
@@ -815,62 +845,162 @@ export default function Calender() {
         {view === "Month" && renderMonthGrid()}
       </motion.div>
 
-      {/* Centered Glassmorphic Input Bar */}
-      <div className="w-full flex justify-center items-center py-6" style={{ position: 'relative', zIndex: 20 }}>
-        <div
-          className="flex items-center w-full max-w-2xl px-6 py-4 gap-3 relative"
-          style={{
-            background: 'rgba(255,255,255,0.95)',
-            borderRadius: '50px',
-            backdropFilter: 'blur(12px)',
-            border: '1.5px solid transparent',
-            backgroundImage: 'linear-gradient(rgba(255,255,255,0.95), rgba(255,255,255,0.95)), linear-gradient(90deg, #6c757d, #495057, #6c757d)',
-            backgroundOrigin: 'border-box',
-            backgroundClip: 'padding-box, border-box',
-            margin: '0 auto',
-            position: 'relative',
-            animation: 'liquify 3s ease-in-out infinite',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 0 60px rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          {showSuccess && (
-            <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-2">
-              <span className="text-sm">✓</span>
-              <span className="text-sm font-medium">Task created</span>
-            </div>
-          )}
-          <Input
-            className="flex-1 text-lg border-0 focus:ring-0 focus:outline-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-            placeholder="Type task details (e.g. 'Meeting from 2pm to 4pm urgent' or 'Workout at 6am [fitness]')"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            style={{ color: '#1a1a1a', fontWeight: 500, boxShadow: 'none' }}
-          />
-          <Button variant="ghost" style={{ color: '#6c757d', borderRadius: 16, cursor: 'pointer' }}>
-            <MicIcon size={24} />
-          </Button>
-          <Button
-            onClick={handleQuickAdd}
-            disabled={!input.trim()}
-            style={{
-              background: input.trim() ? '#6c757d' : '#adb5bd',
-              color: '#fff',
-              borderRadius: 16,
-              fontWeight: 600,
-              boxShadow: input.trim() ? '0 2px 8px rgba(0, 0, 0, 0.2)' : 'none',
-              cursor: input.trim() ? 'pointer' : 'not-allowed'
-            }}
-          >
-            Add
-          </Button>
-        </div>
-      </div>
-
         {/* Modals */}
         <AddTaskModal />
         <TaskDetailsModal />
-    </div>
+        </div>
+
+        {/* Right Side: AI Chat Panel */}
+        <div className="w-[400px] border-l flex flex-col" style={{ background: 'rgba(255, 255, 255, 0.95)', borderColor: '#e5e7eb' }}>
+          {/* AI Chat Header */}
+          <div className="p-4 border-b flex items-center gap-2" style={{ borderColor: '#e5e7eb' }}>
+            <div className="flex-shrink-0 rounded-full p-2 flex items-center justify-center" style={{
+              width: 36,
+              height: 36,
+              background: 'linear-gradient(135deg, #EC4899, #A855F7)',
+              boxShadow: '0 4px 15px rgba(236, 72, 153, 0.4)',
+            }}>
+              <BotIcon className="text-white" size={18} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">AI Assistant</h2>
+              <p className="text-xs text-slate-500">Chat to manage your calendar</p>
+            </div>
+          </div>
+
+          {/* Chat Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {aiMessages.length === 0 && (
+              <div className="text-center py-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-3" style={{
+                  background: 'linear-gradient(135deg, #EC4899, #A855F7)',
+                  boxShadow: '0 4px 15px rgba(236, 72, 153, 0.3)',
+                }}>
+                  <BotIcon className="text-white" size={28} />
+                </div>
+                <p className="text-slate-600 text-sm mb-2">Hi! I'm your AI scheduling assistant.</p>
+                <p className="text-slate-400 text-xs">Ask me to add, remove, or move tasks on your calendar!</p>
+              </div>
+            )}
+
+            {aiMessages.map((message) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div className={`max-w-[85%] ${message.type === 'user' ? 'order-2' : 'order-1'}`}>
+                  <div className={`rounded-2xl px-4 py-3 ${
+                    message.type === 'user'
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white'
+                      : 'bg-slate-100 text-slate-800'
+                  }`}>
+                    <p className="text-sm leading-relaxed">{message.content}</p>
+
+                    {/* Show task details if created */}
+                    {message.tasksCreated > 0 && message.tasks && (
+                      <div className="mt-2 pt-2 border-t border-white/20 space-y-1">
+                        <p className="text-xs font-semibold opacity-90">✓ Created {message.tasksCreated} task{message.tasksCreated !== 1 ? 's' : ''}</p>
+                        {message.tasks.map((task, i) => (
+                          <div key={i} className="text-xs opacity-80">
+                            • {task.name} ({task.startTime}-{task.endTime})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Show conflicts */}
+                    {message.conflicts && message.conflicts.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-300 space-y-1">
+                        <p className="text-xs font-semibold">⚠ Conflicts:</p>
+                        {message.conflicts.map((conflict, i) => (
+                          <div key={i} className="text-xs">• {conflict}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Show alternatives */}
+                    {message.suggestedAlternatives && message.suggestedAlternatives.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-300 space-y-1">
+                        <p className="text-xs font-semibold">💡 Suggestions:</p>
+                        {message.suggestedAlternatives.map((alt, i) => (
+                          <div key={i} className="text-xs">• {alt}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 px-2">
+                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+
+            {/* Typing Indicator */}
+            {isAiTyping && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex justify-start"
+              >
+                <div className="bg-slate-100 rounded-2xl px-4 py-3">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></span>
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Success Notification */}
+          {showSuccess && (
+            <div className="px-4 pb-2">
+              <div className="bg-green-500 text-white px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
+                <span>✓</span>
+                <span className="font-medium">Task added to calendar!</span>
+              </div>
+            </div>
+          )}
+
+          {/* Chat Input */}
+          <div className="p-4 border-t" style={{ borderColor: '#e5e7eb' }}>
+            <div className="flex items-center gap-2 p-3 rounded-2xl border border-slate-200 bg-white">
+              <Input
+                className="flex-1 border-0 focus:ring-0 focus:outline-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm"
+                placeholder="Ask me to add, remove, or move tasks..."
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                style={{ color: '#1a1a1a', fontWeight: 500, boxShadow: 'none' }}
+              />
+              <Button
+                onClick={handleQuickAdd}
+                disabled={!input.trim() || isProcessing}
+                size="sm"
+                className="rounded-xl"
+                style={{
+                  background: input.trim() && !isProcessing ? 'linear-gradient(135deg, #EC4899, #A855F7)' : '#d1d5db',
+                  color: '#fff',
+                  cursor: input.trim() && !isProcessing ? 'pointer' : 'not-allowed',
+                  padding: '8px 12px',
+                }}
+              >
+                {isProcessing ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <SendIcon size={16} />
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

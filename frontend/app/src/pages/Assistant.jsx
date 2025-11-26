@@ -260,7 +260,7 @@ export default function Assistant() {
   };
 
   // Handle sending message
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!input.trim()) return;
 
     const userInput = input;
@@ -285,17 +285,52 @@ export default function Assistant() {
     setMessages((prev) => [...prev, userMessage]);
     setIsTyping(true);
 
-    // Simulate AI response with delay
-    setTimeout(() => {
+    try {
+      // Get user ID from localStorage (default to 1 for now)
+      const userId = parseInt(localStorage.getItem('userId') || '1');
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      // Call the backend API
+      const response = await fetch('http://localhost:3000/api/assistant/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: userInput,
+          userId,
+          userTimezone,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
       const assistantMessage = {
         id: Date.now() + 1,
         type: "assistant",
-        content: getPlaceholderResponse(userInput),
+        content: data.message || getPlaceholderResponse(userInput),
         timestamp: new Date().toISOString(),
       };
+      
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Error calling assistant API:', error);
+      
+      const errorMessage = {
+        id: Date.now() + 1,
+        type: "assistant",
+        content: `Failed to fetch response from the assistant. Please make sure the backend server is running on port 3000. Error: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      };
+      
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 1000); // Random delay between 1-2 seconds
+    }
   };
 
   // Handle Enter key in input
