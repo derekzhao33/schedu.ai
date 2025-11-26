@@ -40,6 +40,8 @@ model Task {
     google_event_id String?
     canvas_event_id String?
     source String?
+    recurrence String[]
+    is_recurring Boolean @default(false)
     user User @relation(fields: [user_id], references: [id])
     user_id Int
 }

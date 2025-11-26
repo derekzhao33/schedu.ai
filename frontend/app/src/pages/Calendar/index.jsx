@@ -305,8 +305,24 @@ export default function Calendar() {
     }
   };
 
-  // Combine all event sources
-  const allEvents = [...getAllEvents(), ...canvasTasks];
+  // Combine all event sources and expand recurring tasks
+  const allEvents = React.useMemo(() => {
+    const baseEvents = [...getAllEvents(), ...canvasTasks];
+    const expandedEvents = [];
+
+    baseEvents.forEach(task => {
+      // If task has recurrence, expand it
+      if (task.recurrence && Array.isArray(task.recurrence) && task.recurrence.length > 0) {
+        const recurringInstances = expandRecurringTask(task, task.recurrence);
+        expandedEvents.push(...recurringInstances);
+      } else {
+        // Non-recurring task, add as-is
+        expandedEvents.push(task);
+      }
+    });
+
+    return expandedEvents;
+  }, [tasks, canvasTasks, events, googleCalendarEvents]); // Re-compute when any event source changes
 
   return (
     <div className={`flex min-h-screen ${theme === 'dark' ? 'dark' : ''}`} style={{ background: PRIMARY_BG }}>

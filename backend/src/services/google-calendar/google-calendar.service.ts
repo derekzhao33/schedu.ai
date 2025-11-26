@@ -183,6 +183,7 @@ export class GoogleCalendarService {
       description?: string;
       startTime: Date;
       endTime: Date;
+      recurrence?: string[];
     }
   ) {
     try {
@@ -194,7 +195,7 @@ export class GoogleCalendarService {
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-      const event = {
+      const event: any = {
         summary: eventData.name,
         description: eventData.description || '',
         start: {
@@ -206,6 +207,11 @@ export class GoogleCalendarService {
           timeZone: 'UTC',
         },
       };
+
+      // Add recurrence rules if provided
+      if (eventData.recurrence && eventData.recurrence.length > 0) {
+        event.recurrence = eventData.recurrence;
+      }
 
       const response = await calendar.events.insert({
         calendarId: 'primary',

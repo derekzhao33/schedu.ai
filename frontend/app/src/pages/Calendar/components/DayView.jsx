@@ -17,6 +17,10 @@ export default function DayView({
 
   return (
     <div className="mt-3 flex flex-col flex-1 min-h-0 overflow-hidden px-3 pb-6 pt-4" style={{ background: 'transparent', minHeight: 0 }}>
+      {/* Day Header with Date */}
+      <div className="text-2xl font-bold mb-2 max-w-full mx-auto w-full" style={{ color: '#1f2937' }}>
+        {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+      </div>
       <div className="text-base font-semibold mb-4 max-w-full mx-auto w-full" style={{ color: '#374151' }}>Timeline</div>
       <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-4">
         <div className="flex flex-row max-w-full mx-auto w-full gap-0">
