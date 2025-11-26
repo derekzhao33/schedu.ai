@@ -31,9 +31,10 @@ interface AIResponse {
   missingInfo?: string[];
   conflicts?: string[];
   suggestedAlternatives?: string[];
-  tasksToReschedule?: string[]; // New: Tasks that need rescheduling
-  reschedulingOptions?: Record<string, string[]>; // New: Alternatives for rescheduled tasks
-  status?: 'complete' | 'needs_confirmation' | 'reschedule_confirmation'; // New: Reschedule status
+  tasksToReschedule?: string[]; // Tasks that need rescheduling
+  reschedulingOptions?: Record<string, string[]>; // Alternatives for rescheduled tasks
+  tasksToDelete?: string[]; // Tasks to delete (by name)
+  status?: 'complete' | 'needs_confirmation' | 'reschedule_confirmation' | 'deletion_confirmation';
 }
 
 interface DbTask {
@@ -43,6 +44,8 @@ interface DbTask {
   user_id: number;
   name?: string;
   priority?: 'low' | 'medium' | 'high';
+  recurrence?: string[]; // RRULE format
+  isRecurring?: boolean; // Quick check if task is recurring
 }
 
 // In-memory task storage for current session
@@ -275,7 +278,8 @@ function parseTimeFormat(timeStr: string): string {
 export async function processNaturalLanguageInput(
   input: string,
   userId: number,
-  userTimezone: string = 'America/Los_Angeles'
+  userTimezone: string = 'America/Los_Angeles',
+  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>
 ): Promise<AIResponse> {
   try {
     // Get user's existing tasks for context and pattern analysis
@@ -288,6 +292,18 @@ export async function processNaturalLanguageInput(
     const currentTime = formatInTimeZone(nowUserTz, userTimezone, 'HH:mm');
     const dayOfWeek = formatInTimeZone(nowUserTz, userTimezone, 'EEEE');
 
+    // Format existing tasks for Claude to see
+    const existingTasksInfo = existingTasks.length > 0 
+      ? existingTasks.map(task => {
+          const startTime = formatInTimeZone(task.start_time, userTimezone, 'HH:mm');
+          const endTime = formatInTimeZone(task.end_time, userTimezone, 'HH:mm');
+          const taskDate = formatInTimeZone(task.start_time, userTimezone, 'yyyy-MM-dd');
+          const duration = (new Date(task.end_time).getTime() - new Date(task.start_time).getTime()) / (1000 * 60);
+          const recurringInfo = task.isRecurring ? ` [RECURRING: ${task.recurrence?.join(', ')}]` : '';
+          return `  - "${task.name || 'Untitled'}" on ${taskDate} from ${startTime} to ${endTime} (${duration} mins, Priority: ${task.priority || 'medium'})${recurringInfo}`;
+        }).join('\n')
+      : '  (No tasks scheduled yet)';
+
     // Comprehensive system prompt for Claude
     const systemPrompt = `You are an expert task scheduling AI assistant. Your job is to extract task information from natural language and help users schedule events intelligently.
 
@@ -297,6 +313,11 @@ CURRENT CONTEXT:
 - Current time: ${currentTime}
 - User's average task duration: ${patterns.averageDuration} minutes
 - User's preferred start time: ${patterns.commonStartHour}:00
+
+EXISTING TASKS IN USER'S SCHEDULE:
+${existingTasksInfo}
+
+IMPORTANT: You MUST check for time conflicts with the existing tasks listed above. DO NOT create overlapping tasks at the same time. If a new task conflicts with an existing task, apply the priority rules below.
 
 AVAILABLE PASTEL COLOURS:
 red, blue, yellow, orange, green, purple
@@ -346,9 +367,141 @@ CRITICAL TIME PARSING RULES:
    - MEDIUM: normal mentions, no special keywords (default)
    - LOW: "maybe", "whenever", "optional", "if time", "break", "free time"
 
-6. **CRITICAL - PRIORITY-BASED SCHEDULING**:
+6. **TASK DELETION & MODIFICATION**:
+   Users can delete or move tasks in several ways:
+   
+   **IMPORTANT: Always ask for confirmation before deleting or moving tasks!**
+   
+   **Direct Deletion Requests**:
+   - "Delete my meeting" → Ask: "I found your 'Meeting' at 15:00-16:00. Should I delete it?"
+   - "Remove the workout at 3pm" → Ask for confirmation before deleting
+   - "Cancel tomorrow's dentist appointment" → Ask for confirmation
+   
+   **Moving/Rescheduling Tasks**:
+   - "Move my meeting to 4pm" → Find "meeting", preserve duration, ask: "I'll move your Meeting from 15:00-16:00 to 16:00-17:00. Confirm?"
+   - "Move meeting from 2pm to 5pm" → Delete old, create new at 5pm with same duration
+   - "Reschedule lunch to 1pm" → Ask: "I'll move your Lunch to 13:00. Confirm?"
+   
+   **CRITICAL - Preserve Task Duration When Moving**:
+   - If task is 60 mins (15:00-16:00) and user says "move to 8pm"
+   - New task should be 60 mins (20:00-21:00), NOT just 20:00-21:00 by default
+   - Calculate: new_end = new_start + original_duration
+   
+   **Context & References**:
+   - "the first one" → Refers to the first alternative time slot mentioned
+   - "the second one" → Refers to the second alternative
+   - "the meeting" → Look for task with "meeting" in name (case-insensitive)
+   - If multiple matches, ask which one: "You have 'Team Meeting' and 'Client Meeting'. Which one?"
+   
+   **Response Format for Deletions (AWAITING CONFIRMATION)**:
+   {
+     "message": "I found your 'Meeting' scheduled at 15:00-16:00. Should I delete it?",
+     "tasksToDelete": [],  // Empty until confirmed
+     "tasks": [],
+     "status": "deletion_confirmation"
+   }
+   
+   **Response Format for Moves (AWAITING CONFIRMATION)**:
+   {
+     "message": "I'll move your 'Meeting' from 15:00-16:00 to 20:00-21:00. Confirm?",
+     "tasksToDelete": [],  // Empty until confirmed
+     "tasks": [],  // Empty until confirmed
+     "status": "needs_confirmation"
+   }
+   
+   **After User Confirms (says "yes", "confirm", "do it", etc.)**:
+   {
+     "message": "Done! I've moved your meeting to 8pm.",
+     "tasksToDelete": ["Meeting"],  // Now delete the old one
+     "tasks": [{  // Now create the new one
+       "name": "Meeting",
+       "date": "2025-11-26",
+       "startTime": "20:00",
+       "endTime": "21:00",
+       "priority": "medium",
+       "colour": "blue"
+     }],
+     "status": "complete"
+   }
+   
+   **Examples**:
+   
+   Example 1: Deletion with confirmation
+   User: "Delete my meeting"
+   AI: {
+     "message": "I found your 'Meeting' at 15:00-16:00 today. Should I delete it?",
+     "tasksToDelete": [],
+     "tasks": [],
+     "status": "deletion_confirmation"
+   }
+   User: "yes"
+   AI: {
+     "message": "Done! I've deleted your meeting.",
+     "tasksToDelete": ["Meeting"],
+     "tasks": [],
+     "status": "complete"
+   }
+   
+   Example 2: Move with duration preservation
+   User: "Move math homework to 8pm"
+   (Task: "Math homework" currently 15:00-16:00, 60 mins)
+   AI: {
+     "message": "I'll move your 'Math homework' from 3:00 PM to 8:00 PM (20:00-21:00). Confirm?",
+     "tasksToDelete": [],
+     "tasks": [],
+     "status": "needs_confirmation"
+   }
+   User: "yes"
+   AI: {
+     "message": "Done! Moved to 8pm.",
+     "tasksToDelete": ["Math homework"],
+     "tasks": [{
+       "name": "Math homework",
+       "date": "2025-11-26",
+       "startTime": "20:00",
+       "endTime": "21:00",
+       "priority": "high",
+       "colour": "purple"
+     }],
+     "status": "complete"
+   }
+   
+   Example 3: Reference handling ("the first one")
+   Previous AI message: "I can reschedule it to: 13:00-14:00, 14:00-15:00, or 16:00-17:00"
+   User: "the first one"
+   AI: {
+     "message": "I'll reschedule your meeting to 13:00-14:00. Confirm?",
+     "tasksToDelete": ["Meeting"],
+     "tasks": [{
+       "name": "Meeting",
+       "date": "2025-11-26",
+       "startTime": "13:00",
+       "endTime": "14:00",
+       "priority": "medium",
+       "colour": "blue"
+     }],
+     "status": "complete"
+   }
+   
+   **Matching Rules**:
+   - Match by task name (case-insensitive, partial match OK if unambiguous)
+   - If user says "move it" or "delete it", refer to the last mentioned task
+   - Track context from conversation history
+
+7. **CRITICAL - PRIORITY-BASED SCHEDULING**:
    Priority hierarchy: LOW < MEDIUM < HIGH
    
+   **STEP 1: ALWAYS CHECK FOR TIME OVERLAPS FIRST**
+   Before accepting ANY new task, you MUST:
+   - Compare the new task's date and time range with EVERY existing task listed above
+   - A conflict exists if ANY part of the time ranges overlap on the same date
+   - Example conflicts:
+     * New: 15:00-16:00, Existing: 15:00-16:00 → CONFLICT (exact overlap)
+     * New: 15:00-16:00, Existing: 15:30-16:30 → CONFLICT (partial overlap)
+     * New: 14:30-16:00, Existing: 15:00-17:00 → CONFLICT (partial overlap)
+     * New: 15:00-16:00, Existing: 14:00-15:00 → NO conflict (back-to-back is OK)
+   
+   **STEP 2: IF CONFLICT DETECTED, APPLY PRIORITY RULES**
    WHEN A NEW HIGH OR MEDIUM PRIORITY TASK CONFLICTS WITH EXISTING TASKS:
    - Check the priority of conflicting tasks
    - IF new task has HIGHER priority than conflicting task(s):
@@ -359,8 +512,11 @@ CRITICAL TIME PARSING RULES:
    
    - IF new task has LOWER or EQUAL priority to existing task:
      * DO NOT reschedule the existing task
+     * DO NOT create the new task at the conflicting time
      * Suggest alternative times for the NEW task instead
      * Ask user to choose a different time slot
+   
+   **REMEMBER: You can see all existing tasks at the top of this prompt. Check them EVERY time before scheduling.**
    
    WHEN MULTIPLE CONFLICTS WITH DIFFERENT PRIORITIES:
    - Always prioritize higher-priority tasks
@@ -420,38 +576,100 @@ CRITICAL TIME PARSING RULES:
    - EDUCATION/STUDY tasks → purple
    - OTHER → orange
 
-8. Recurring Events (CRITICAL):
-   - "every day" / "daily" → ["RRULE:FREQ=DAILY"]
+8. **RECURRING TASKS (CRITICAL)**:
+   
+   **Basic Recurring Patterns**:
+   - "daily" / "every day" → ["RRULE:FREQ=DAILY"]
+   - "weekly" → ["RRULE:FREQ=WEEKLY"]
    - "every Monday" → ["RRULE:FREQ=WEEKLY;BYDAY=MO"]
-   - "every Mon and Wed" → ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]
-   - "weekdays only" → ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"]
+   - "every Mon and Wed" / "every Monday Wednesday" → ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]
+   - "every Tuesday and Thursday" → ["RRULE:FREQ=WEEKLY;BYDAY=TU,TH"]
+   - "weekdays" / "weekdays only" → ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"]
+   - "weekends" / "weekends only" → ["RRULE:FREQ=WEEKLY;BYDAY=SA,SU"]
    - "for 2 weeks" → Add UNTIL date 14 days from start
-   - "10 times" → ["RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=10"]
-   - MUST be array format: ["RRULE:..."], NOT just "RRULE:..."
+   - "10 times" → ["RRULE:FREQ=WEEKLY;COUNT=10"]
+   
+   **Day Abbreviations for RRULE**:
+   - MO = Monday, TU = Tuesday, WE = Wednesday, TH = Thursday
+   - FR = Friday, SA = Saturday, SU = Sunday
+   
+   **MUST be array format**: ["RRULE:..."], NOT just "RRULE:..."
+   
+   **Recurring Task Conflicts**:
+   When a new task (any priority) conflicts with a recurring task:
+   
+   Response: {
+     "message": "Your [new task] at [time] falls on your recurring [recurring task name] that happens [pattern]. Would you like me to:\n1. Move your [new task] to another time\n2. Skip the recurring task JUST FOR [date] (other occurrences continue normally)",
+     "conflicts": ["Conflicts with recurring task: [name]"],
+     "status": "needs_confirmation"
+   }
+   
+   Example:
+   User: "dentist appointment Monday 2pm"
+   Existing: "Gym" recurring every Monday 2-3pm
+   AI: {
+     "message": "Your dentist appointment falls on your recurring Gym session (every Monday 2-3pm). Would you like me to:\n1. Move your dentist appointment to another time\n2. Skip gym JUST FOR Monday Nov 25 (your other gym sessions continue)",
+     "conflicts": ["Conflicts with recurring Gym"],
+     "suggestedAlternatives": ["15:00-16:00", "16:00-17:00", "17:00-18:00"],
+     "status": "needs_confirmation"
+   }
+   
+   User says: "skip gym just for today" or "override just today" or "2"
+   AI: Creates appointment, marks that specific recurring instance as skipped
 
-9. Multi-Task Handling:
-   - "Meeting at 2pm and lunch at 12pm" → Create TWO separate tasks
-   - Return array of task objects
-   - Each gets its own name, time, priority, etc.
+9. **TASK SPLITTING**:
+   
+   **When User Wants to Split a Task**:
+   User might say:
+   - "Split my 2 hour study session into two 1-hour sessions, one at 8-9am and another 12-1pm"
+   - "I have a 3hr meeting, break it into 9-10am, 11-12pm, and 2-3pm"
+   - "Instead of 2hrs straight, do 1hr at 8am and 1hr at 12pm"
+   
+   **How to Handle**:
+   1. Identify the original task (by name or context)
+   2. Delete the original task
+   3. Create multiple new tasks with the same name (or numbered: "Session 1", "Session 2")
+   4. Confirm the split
+   
+   **Response Format**:
+   {
+     "message": "I'll split your [task name] into [X] sessions: [list times]. Confirm?",
+     "tasksToDelete": ["Original Task Name"],
+     "tasks": [
+       {"name": "[Task] - Part 1", "date": "2025-11-26", "startTime": "08:00", "endTime": "09:00", ...},
+       {"name": "[Task] - Part 2", "date": "2025-11-26", "startTime": "12:00", "endTime": "13:00", ...}
+     ],
+     "status": "needs_confirmation"
+   }
+   
+   **Examples**:
+   
+   Example 1: Split study session
+   User: "I have a 2hr study session tomorrow 2-4pm but split it into 8-9am and 12-1pm instead"
+   AI: {
+     "message": "I'll split your study session into two 1-hour sessions: 8:00-9:00 AM and 12:00-1:00 PM tomorrow. Confirm?",
+     "tasksToDelete": ["Study session"],
+     "tasks": [
+       {"name": "Study session - Part 1", "date": "2025-11-26", "startTime": "08:00", "endTime": "09:00", "priority": "medium", "colour": "purple"},
+       {"name": "Study session - Part 2", "date": "2025-11-26", "startTime": "12:00", "endTime": "13:00", "priority": "medium", "colour": "purple"}
+     ],
+     "status": "needs_confirmation"
+   }
+   
+   Example 2: Break down workout
+   User: "Break my workout into 30 min sessions at 7am, 12pm, and 5pm"
+   AI: {
+     "message": "I'll split your workout into three 30-minute sessions: 7:00-7:30 AM, 12:00-12:30 PM, and 5:00-5:30 PM. Confirm?",
+     "tasksToDelete": ["Workout"],
+     "tasks": [
+       {"name": "Workout - Morning", "date": "2025-11-26", "startTime": "07:00", "endTime": "07:30", "priority": "medium", "colour": "green"},
+       {"name": "Workout - Midday", "date": "2025-11-26", "startTime": "12:00", "endTime": "12:30", "priority": "medium", "colour": "green"},
+       {"name": "Workout - Evening", "date": "2025-11-26", "startTime": "17:00", "endTime": "17:30", "priority": "medium", "colour": "green"}
+     ],
+     "status": "needs_confirmation"
+   }
 
-7. Colour Assignment:
-   - IMPORTANT/URGENT tasks → red
-   - WORK/MEETING tasks → blue
-   - PERSONAL/BREAK tasks → yellow
-   - HEALTH/FITNESS tasks → green
-   - EDUCATION/STUDY tasks → purple
-   - OTHER → orange
-
-8. Recurring Events (CRITICAL):
-   - "every day" / "daily" → ["RRULE:FREQ=DAILY"]
-   - "every Monday" → ["RRULE:FREQ=WEEKLY;BYDAY=MO"]
-   - "every Mon and Wed" → ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]
-   - "weekdays only" → ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"]
-   - "for 2 weeks" → Add UNTIL date 14 days from start
-   - "10 times" → ["RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=10"]
-   - MUST be array format: ["RRULE:..."], NOT just "RRULE:..."
-
-9. Multi-Task Handling:
+10. Multi-Task Handling:
    - "Meeting at 2pm and lunch at 12pm" → Create TWO separate tasks
    - Return array of task objects
    - Each gets its own name, time, priority, etc.
@@ -477,7 +695,9 @@ RESPONSE FORMAT - ALWAYS RETURN JSON:
   "reschedulingOptions": {
     "Task name": ["14:00-15:00", "16:00-17:00", "17:00-18:00"]
   },
-  "status": "complete" | "needs_confirmation" | "reschedule_confirmation"
+  "tasksToDelete": ["Task name to delete"],
+  "status": "complete" | "needs_confirmation" | "reschedule_confirmation" | "deletion_confirmation"
+}
 }
 
 CRITICAL RESPONSE RULES:
@@ -604,23 +824,52 @@ Example valid responses:
   "tasks": [{"name":"Meeting","date":"2025-11-27","startTime":"15:00","endTime":"16:00","priority":"medium","colour":"blue"}]
 }
 
+{
+  "message": "I'll set up your gym sessions every Monday and Wednesday from 6-7pm!",
+  "tasks": [{"name":"Gym","date":"2025-11-25","startTime":"18:00","endTime":"19:00","priority":"medium","colour":"green","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]}]
+}
+
+{
+  "message": "I'll split your study session into two parts: 8-9am and 12-1pm. Confirm?",
+  "tasksToDelete": ["Study session"],
+  "tasks": [
+    {"name":"Study - Part 1","date":"2025-11-26","startTime":"08:00","endTime":"09:00","priority":"medium","colour":"purple"},
+    {"name":"Study - Part 2","date":"2025-11-26","startTime":"12:00","endTime":"13:00","priority":"medium","colour":"purple"}
+  ],
+  "status": "needs_confirmation"
+}
+
 RULES:
 - Timestamps use 24-hour format (14:00 = 2pm)
 - Dates use YYYY-MM-DD format
 - Return tasks as an array, even if just one task
 - Default duration is 1 hour if not specified
 - Colours must be: red, blue, yellow, orange, green, or purple
+- Recurring tasks MUST include "recurrence" field as array: ["RRULE:..."]
+- ALWAYS ask for confirmation before deleting, moving, or splitting tasks
+- When moving tasks, preserve the original duration
+- Track context: "the first one" refers to first suggested time, "it" refers to last mentioned task
 - NO markdown formatting, NO code blocks, just pure JSON`;
+
 
     let completion;
     try {
+      // Build messages array with conversation history
+      const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
+      
+      // Add conversation history if provided
+      if (conversationHistory && conversationHistory.length > 0) {
+        messages.push(...conversationHistory.slice(-6)); // Last 3 exchanges for context
+      }
+      
+      // Add current user input
+      messages.push({ role: 'user', content: input });
+      
       completion = await anthropic.messages.create({
         model: 'claude-sonnet-4-5-20250929',
         max_tokens: 2048,
         system: systemPrompt,
-        messages: [
-          { role: 'user', content: input },
-        ],
+        messages,
         temperature: 0.3,
       });
     } catch (apiError) {
@@ -767,6 +1016,36 @@ RULES:
       validTasks.push(task);
     }
 
+    // Handle task deletions
+    let tasksDeleted = 0;
+    const deletedTaskNames: string[] = [];
+    if (parsedResponse.tasksToDelete && Array.isArray(parsedResponse.tasksToDelete)) {
+      const userTasks = taskStorage.get(userId) || [];
+      
+      for (const taskNameToDelete of parsedResponse.tasksToDelete) {
+        // Find matching task (case-insensitive)
+        const taskIndex = userTasks.findIndex(t => 
+          t.name?.toLowerCase() === taskNameToDelete.toLowerCase()
+        );
+        
+        if (taskIndex !== -1) {
+          const [deletedTask] = userTasks.splice(taskIndex, 1);
+          if (deletedTask) {
+            deletedTaskNames.push(deletedTask.name || 'Untitled');
+            tasksDeleted++;
+            console.log(`Task deleted: ${deletedTask.name} at ${format(new Date(deletedTask.start_time), 'yyyy-MM-dd HH:mm')}`);
+          }
+        } else {
+          console.log(`Task not found for deletion: ${taskNameToDelete}`);
+        }
+      }
+      
+      // Update storage
+      if (tasksDeleted > 0) {
+        taskStorage.set(userId, userTasks);
+      }
+    }
+
     // Create tasks in database (always create valid tasks)
     let tasksCreated = 0;
     const createdTasks = [];
@@ -788,7 +1067,9 @@ RULES:
           end_time: endDateTime,
           user_id: userId,
           name: task.name,
-          priority: task.priority as 'low' | 'medium' | 'high'
+          priority: task.priority as 'low' | 'medium' | 'high',
+          recurrence: task.recurrence,
+          isRecurring: !!(task.recurrence && task.recurrence.length > 0)
         };
         
         if (!taskStorage.has(userId)) {
@@ -798,7 +1079,8 @@ RULES:
         
         tasksCreated++;
         createdTasks.push(task);
-        console.log(`Task created: ${task.name} at ${task.date} ${task.startTime}-${task.endTime} (priority: ${task.priority})`);
+        const recurInfo = task.recurrence ? ` (Recurring: ${task.recurrence.join(', ')})` : '';
+        console.log(`Task created: ${task.name} at ${task.date} ${task.startTime}-${task.endTime} (priority: ${task.priority})${recurInfo}`);
       } catch (error) {
         console.error('Error creating task:', error);
       }
@@ -806,8 +1088,14 @@ RULES:
 
     // Build response
     let message = parsedResponse.message || '';
-    if (missingInfo.length > 0 && tasksCreated === 0) {
+    if (missingInfo.length > 0 && tasksCreated === 0 && tasksDeleted === 0) {
       message = `I need more information: ${missingInfo.join(', ')}.`;
+    }
+    
+    // Add deletion confirmation to message if tasks were deleted
+    if (tasksDeleted > 0 && deletedTaskNames.length > 0) {
+      const deletionSummary = `Deleted: ${deletedTaskNames.join(', ')}`;
+      message = message ? `${message}\n${deletionSummary}` : deletionSummary;
     }
 
     return {
@@ -819,6 +1107,7 @@ RULES:
       suggestedAlternatives: suggestedAlternatives.length > 0 ? suggestedAlternatives : undefined,
       tasksToReschedule: parsedResponse.tasksToReschedule,
       reschedulingOptions: parsedResponse.reschedulingOptions,
+      tasksToDelete: deletedTaskNames.length > 0 ? deletedTaskNames : undefined,
       status: parsedResponse.status,
     };
   } catch (error) {

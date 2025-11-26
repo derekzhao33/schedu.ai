@@ -5,7 +5,7 @@ import { useThemeSettings } from "../../context/ThemeContext";
 import { useGoogleCalendar } from "../../hooks/useGoogleCalendar";
 import { Button } from "../../components/ui/button";
 import { motion } from "framer-motion";
-import { format, addDays, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, addDays, subDays, startOfMonth, endOfMonth, addWeeks, parseISO } from "date-fns";
 import { CalendarIcon, RefreshCw } from "lucide-react";
 import AddTaskModal from "../../components/AddTaskModal";
 import TaskDetailsModal from "../../components/TaskDetailsModal";
@@ -24,7 +24,7 @@ if (typeof document !== 'undefined') {
 }
 
 export default function Calendar() {
-  const { events, tasks, addTask, completeTask, syncGoogleCalendarEvents, getAllEvents } = useSchedule();
+  const { events, tasks, addTask, deleteTask, completeTask, syncGoogleCalendarEvents, getAllEvents } = useSchedule();
   const { openAddTaskModal, openTaskDetailsModal } = useModal();
   const { theme } = useThemeSettings();
   const { isCollapsed } = useSidebar();
@@ -95,6 +95,71 @@ export default function Calendar() {
     else if (view === "Month") setSelectedDate(addDays(selectedDate, 30));
   };
 
+  // Helper function to parse RRULE and generate recurring task instances
+  const expandRecurringTask = (task, recurrenceRules) => {
+    const instances = [];
+    const startDate = parseISO(task.date);
+    const occurrences = 12; // Generate next 12 weeks of occurrences
+
+    // Parse RRULE (simplified parser for common patterns)
+    const parseRRule = (rrule) => {
+      const freq = rrule.match(/FREQ=(\w+)/)?.[1];
+      const byDay = rrule.match(/BYDAY=([A-Z,]+)/)?.[1]?.split(',') || [];
+      return { freq, byDay };
+    };
+
+    recurrenceRules.forEach(rule => {
+      const { freq, byDay } = parseRRule(rule);
+
+      if (freq === 'DAILY') {
+        // Generate daily occurrences for next 12 weeks
+        for (let i = 0; i < occurrences * 7; i++) {
+          const instanceDate = addDays(startDate, i);
+          instances.push({
+            ...task,
+            date: format(instanceDate, 'yyyy-MM-dd'),
+            isRecurringInstance: true,
+            recurrenceParent: task.name,
+          });
+        }
+      } else if (freq === 'WEEKLY' && byDay.length > 0) {
+        // Map day codes to day numbers (0 = Sunday, 1 = Monday, etc.)
+        const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+        const targetDays = byDay.map(d => dayMap[d]).filter(d => d !== undefined);
+
+        for (let week = 0; week < occurrences; week++) {
+          targetDays.forEach(targetDay => {
+            let instanceDate = addWeeks(startDate, week);
+            // Adjust to the target day of the week
+            const currentDay = instanceDate.getDay();
+            const daysToAdd = (targetDay - currentDay + 7) % 7;
+            instanceDate = addDays(instanceDate, daysToAdd);
+
+            instances.push({
+              ...task,
+              date: format(instanceDate, 'yyyy-MM-dd'),
+              isRecurringInstance: true,
+              recurrenceParent: task.name,
+            });
+          });
+        }
+      } else if (freq === 'WEEKLY') {
+        // Weekly on the same day
+        for (let i = 0; i < occurrences; i++) {
+          const instanceDate = addWeeks(startDate, i);
+          instances.push({
+            ...task,
+            date: format(instanceDate, 'yyyy-MM-dd'),
+            isRecurringInstance: true,
+            recurrenceParent: task.name,
+          });
+        }
+      }
+    });
+
+    return instances;
+  };
+
   // Handle AI chat message
   const handleQuickAdd = async () => {
     if (!input.trim()) return;
@@ -115,6 +180,12 @@ export default function Calendar() {
     setIsAiTyping(true);
 
     try {
+      // Build conversation history from last 6 messages (3 exchanges)
+      const conversationHistory = aiMessages.slice(-6).map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
+
       const response = await fetch('http://localhost:3001/api/assistant/process', {
         method: 'POST',
         headers: {
@@ -124,6 +195,7 @@ export default function Calendar() {
           input: userInput,
           userId: 1,
           userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          conversationHistory,
         }),
       });
 
@@ -142,9 +214,23 @@ export default function Calendar() {
         tasks: data.tasks || [],
         conflicts: data.conflicts,
         suggestedAlternatives: data.suggestedAlternatives,
+        tasksToDelete: data.tasksToDelete,
         tasksCreated: data.tasksCreated || 0,
       };
       setAiMessages((prev) => [...prev, aiMessage]);
+
+      // Handle task deletions
+      if (data.tasksToDelete && data.tasksToDelete.length > 0) {
+        data.tasksToDelete.forEach(taskNameToDelete => {
+          // Find and delete task by name (case-insensitive)
+          const taskIndex = tasks.findIndex(task => 
+            task.name?.toLowerCase() === taskNameToDelete.toLowerCase()
+          );
+          if (taskIndex !== -1) {
+            deleteTask(taskIndex);
+          }
+        });
+      }
 
       // Add created tasks to calendar
       if (data.tasks && data.tasks.length > 0) {
@@ -159,7 +245,16 @@ export default function Calendar() {
             color: task.colour || 'blue',
             label: task.label || '',
           };
-          addTask(frontendTask);
+
+          // Check if task has recurrence pattern
+          if (task.recurrence && task.recurrence.length > 0) {
+            // Expand recurring task into multiple instances
+            const recurringInstances = expandRecurringTask(frontendTask, task.recurrence);
+            recurringInstances.forEach(instance => addTask(instance));
+          } else {
+            // Add single task
+            addTask(frontendTask);
+          }
         });
 
         // Show success notification

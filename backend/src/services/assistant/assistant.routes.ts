@@ -4,7 +4,7 @@ import { processNaturalLanguageInput } from './assistant.service.js';
 const router: Router = Router();
 
 router.post('/process', async (req: express.Request, res: express.Response) => {
-  const { input, userId, userTimezone } = req.body;
+  const { input, userId, userTimezone, conversationHistory } = req.body;
 
   // Validate input
   if (!input || typeof input !== 'string' || !input.trim()) {
@@ -25,13 +25,15 @@ router.post('/process', async (req: express.Request, res: express.Response) => {
     console.log('Processing AI request:', {
       input: input.substring(0, 100),
       userId,
-      timezone: userTimezone || 'default'
+      timezone: userTimezone || 'default',
+      historyLength: conversationHistory?.length || 0
     });
 
     const result = await processNaturalLanguageInput(
       input.trim(), 
       userId, 
-      userTimezone || 'America/Los_Angeles'
+      userTimezone || 'America/Los_Angeles',
+      conversationHistory
     );
 
     console.log('AI response success:', {
