@@ -92,20 +92,33 @@ export class GoogleCalendarService {
         const start = event.start?.dateTime || event.start?.date;
         const end = event.end?.dateTime || event.end?.date;
 
-        const startDate = start ? new Date(start) : new Date();
-        const endDate = end ? new Date(end) : new Date();
+        // Handle all-day events (date-only format) vs timed events (dateTime format)
+        let date: string;
+        let startTime: string | undefined;
+        let endTime: string | undefined;
+
+        if (event.start?.dateTime) {
+          // Timed event - use dateTime
+          const startDate = new Date(event.start.dateTime);
+          const endDate = new Date(event.end?.dateTime || event.start.dateTime);
+          
+          date = startDate.toISOString().split('T')[0];
+          startTime = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+          endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+        } else {
+          // All-day event - use date string directly without timezone conversion
+          date = event.start?.date || new Date().toISOString().split('T')[0];
+          startTime = undefined;
+          endTime = undefined;
+        }
 
         return {
           id: event.id,
           name: event.summary || 'Untitled Event',
           description: event.description || '',
-          date: startDate.toISOString().split('T')[0],
-          startTime: event.start?.dateTime
-            ? `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`
-            : undefined,
-          endTime: event.end?.dateTime
-            ? `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`
-            : undefined,
+          date,
+          startTime,
+          endTime,
           location: event.location,
           source: 'google-calendar',
           googleEventId: event.id,
