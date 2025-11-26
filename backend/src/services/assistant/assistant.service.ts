@@ -198,29 +198,53 @@ function findAlternativeSlots(
   existingTasks: ConflictingTask[],
   targetDate: string,
   duration: number,
-  excludeTime?: { start: string; end: string }
+  googleCalendarEvents?: Array<any>
 ): Array<{ startTime: string; endTime: string }> {
   const alternatives: Array<{ startTime: string; endTime: string }> = [];
   const workStart = 9 * 60; // 9 AM
   const workEnd = 18 * 60; // 6 PM
   
-  // Filter and sort tasks for this day
-  const dayTasks = existingTasks
+  // Combine existing tasks and Google Calendar events for this day
+  const allBlockedTimes: Array<{ start: number; end: number }> = [];
+  
+  // Add existing tasks
+  existingTasks
     .filter(task => {
       const taskDate = format(new Date(task.start_time), 'yyyy-MM-dd');
       return taskDate === targetDate;
     })
-    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    .forEach(task => {
+      const taskStart = new Date(task.start_time);
+      const taskEnd = new Date(task.end_time);
+      allBlockedTimes.push({
+        start: taskStart.getHours() * 60 + taskStart.getMinutes(),
+        end: taskEnd.getHours() * 60 + taskEnd.getMinutes()
+      });
+    });
   
-  // Find gaps between tasks
+  // Add Google Calendar events
+  (googleCalendarEvents || [])
+    .filter((gcEvent: any) => gcEvent.date === targetDate)
+    .forEach((gcEvent: any) => {
+      if (gcEvent.startTime && gcEvent.endTime) {
+        const [startHour, startMin] = gcEvent.startTime.split(':').map(Number);
+        const [endHour, endMin] = gcEvent.endTime.split(':').map(Number);
+        allBlockedTimes.push({
+          start: startHour * 60 + startMin,
+          end: endHour * 60 + endMin
+        });
+      }
+    });
+  
+  // Sort by start time
+  allBlockedTimes.sort((a, b) => a.start - b.start);
+  
+  // Find gaps between blocked times
   let currentTime = workStart;
   
-  for (const task of dayTasks) {
-    const taskStart = new Date(task.start_time);
-    const taskMinutes = taskStart.getHours() * 60 + taskStart.getMinutes();
-    
-    // Check if there's a gap
-    if (currentTime + duration <= taskMinutes) {
+  for (const blocked of allBlockedTimes) {
+    // Check if there's a gap before this blocked time
+    if (currentTime + duration <= blocked.start) {
       const hour = Math.floor(currentTime / 60);
       const min = currentTime % 60;
       const startTime = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
@@ -235,8 +259,7 @@ function findAlternativeSlots(
       if (alternatives.length >= 3) return alternatives;
     }
     
-    const taskEnd = new Date(task.end_time);
-    currentTime = Math.max(currentTime, taskEnd.getHours() * 60 + taskEnd.getMinutes());
+    currentTime = Math.max(currentTime, blocked.end);
   }
   
   // Check final slot if available
@@ -279,7 +302,8 @@ export async function processNaturalLanguageInput(
   input: string,
   userId: number,
   userTimezone: string = 'America/Los_Angeles',
-  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>
+  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>,
+  googleCalendarEvents?: Array<any>
 ): Promise<AIResponse> {
   try {
     // Get user's existing tasks for context and pattern analysis
@@ -304,6 +328,18 @@ export async function processNaturalLanguageInput(
         }).join('\n')
       : '  (No tasks scheduled yet)';
 
+    // Format Google Calendar events for Claude to see
+    const googleEventsInfo = (googleCalendarEvents && googleCalendarEvents.length > 0)
+      ? googleCalendarEvents.map((event: any) => {
+          const isAllDay = !event.startTime;
+          if (isAllDay) {
+            return `  - "${event.name}" on ${event.date} (ALL DAY - BLOCKED) [GOOGLE CALENDAR]`;
+          } else {
+            return `  - "${event.name}" on ${event.date} from ${event.startTime} to ${event.endTime} [GOOGLE CALENDAR - CANNOT MOVE]`;
+          }
+        }).join('\n')
+      : null;
+
     // Comprehensive system prompt for Claude
     const systemPrompt = `You are an expert task scheduling AI assistant. Your job is to extract task information from natural language and help users schedule events intelligently.
 
@@ -316,6 +352,12 @@ CURRENT CONTEXT:
 
 EXISTING TASKS IN USER'S SCHEDULE:
 ${existingTasksInfo}
+
+${googleEventsInfo ? `GOOGLE CALENDAR EVENTS (EXTERNAL - CANNOT BE MOVED):
+${googleEventsInfo}
+
+🚨 CRITICAL: Google Calendar events are EXTERNAL commitments and CANNOT be rescheduled or overridden under ANY circumstances. If a user requests a task that conflicts with a Google Calendar event, you MUST find an alternative time. Never suggest moving or deleting Google Calendar events.
+` : ''}
 
 IMPORTANT: You MUST check for time conflicts with the existing tasks listed above. DO NOT create overlapping tasks at the same time. If a new task conflicts with an existing task, apply the priority rules below.
 
@@ -954,6 +996,46 @@ RULES:
       const startDateTime = new Date(`${task.date}T${task.startTime}`);
       const endDateTime = new Date(`${task.date}T${task.endTime}`);
 
+      // First check for conflicts with Google Calendar events (immovable)
+      const googleConflicts = (googleCalendarEvents || []).filter((gcEvent: any) => {
+        if (gcEvent.date !== task.date) return false;
+        if (!gcEvent.startTime || !gcEvent.endTime) {
+          // All-day event - blocks entire day
+          return true;
+        }
+        
+        const gcStart = new Date(`${gcEvent.date}T${gcEvent.startTime}`);
+        const gcEnd = new Date(`${gcEvent.date}T${gcEvent.endTime}`);
+        
+        return (
+          (startDateTime >= gcStart && startDateTime < gcEnd) ||
+          (endDateTime > gcStart && endDateTime <= gcEnd) ||
+          (startDateTime <= gcStart && endDateTime >= gcEnd)
+        );
+      });
+
+      if (googleConflicts.length > 0) {
+        // Conflict with Google Calendar event - cannot proceed
+        const conflictNames = googleConflicts.map((gc: any) => gc.name).join(', ');
+        conflicts.push(`"${task.name}" on ${task.date} at ${task.startTime} conflicts with Google Calendar event(s): ${conflictNames}. These events cannot be moved.`);
+        
+        // Find alternative time slots
+        const alternatives = findAlternativeSlots(
+          existingTasks,
+          task.date,
+          (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60),
+          googleCalendarEvents || []
+        );
+        
+        if (alternatives.length > 0) {
+          const timeSlots = alternatives.slice(0, 3).map(alt => `${alt.startTime}-${alt.endTime}`).join(', ');
+          suggestedAlternatives.push(`For "${task.name}", available times on ${task.date}: ${timeSlots}`);
+        } else {
+          suggestedAlternatives.push(`For "${task.name}", no available time slots found on ${task.date}. Try a different day.`);
+        }
+        continue; // Skip this task
+      }
+
       const taskConflicts = checkConflictsWithPriority(
         { 
           startTime: startDateTime, 
@@ -984,7 +1066,7 @@ RULES:
               existingTasks,
               task.date,
               taskDuration,
-              { start: task.startTime, end: task.endTime }
+              googleCalendarEvents
             );
             reschedulingOptions[taskName] = alternatives.map(alt => `${alt.startTime}-${alt.endTime}`);
           }
@@ -998,7 +1080,8 @@ RULES:
           const alternatives = findAlternativeSlots(
             existingTasks,
             task.date,
-            patterns.averageDuration
+            patterns.averageDuration,
+            googleCalendarEvents
           );
           suggestedAlternatives.push(...alternatives.slice(0, 3).map(alt => `${alt.startTime}-${alt.endTime}`));
           
