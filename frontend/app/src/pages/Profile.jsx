@@ -48,7 +48,20 @@ const Profile = () => {
 
   const handleSaveProfile = async () => {
     try {
-      await updateProfile(firstName, lastName, email);
+      // Only send fields that have changed
+      const updates = {};
+      if (firstName !== user?.first_name) updates.firstName = firstName;
+      if (lastName !== user?.last_name) updates.lastName = lastName;
+      if (email !== user?.email) updates.email = email;
+
+      // If nothing changed, don't make API call
+      if (Object.keys(updates).length === 0) {
+        setProfileMessage('No changes to save');
+        setTimeout(() => setProfileMessage(''), 3000);
+        return;
+      }
+
+      await updateProfile(updates);
       setProfileMessage('Profile updated successfully!');
       setTimeout(() => setProfileMessage(''), 3000);
     } catch (error) {

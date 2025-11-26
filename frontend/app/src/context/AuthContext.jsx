@@ -125,11 +125,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateProfile = async (firstName, lastName, email) => {
+  const updateProfile = async (updates) => {
     setError(null);
     try {
       if (!user) {
         throw new Error('No user logged in');
+      }
+
+      // Only include fields that are provided (changed fields)
+      const updateData = {};
+      if (updates.firstName !== undefined) updateData.first_name = updates.firstName;
+      if (updates.lastName !== undefined) updateData.last_name = updates.lastName;
+      if (updates.email !== undefined) updateData.email = updates.email;
+
+      // If no fields to update, return current user
+      if (Object.keys(updateData).length === 0) {
+        return user;
       }
 
       // Call backend API to update user
@@ -138,11 +149,7 @@ export const AuthProvider = ({ children }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-        }),
+        body: JSON.stringify(updateData),
       });
 
       const data = await response.json();
