@@ -18,7 +18,7 @@ export function CanvasIntegrationModal({ isOpen, onClose, onSuccess }) {
 
     try {
       const userId = localStorage.getItem('userId') || 1;
-      const response = await fetch(`http://localhost:3001/api/canvas/setup`, {
+      const response = await fetch(`https://schedu-ai-zocp.onrender.com/api/canvas/setup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

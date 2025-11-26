@@ -56,7 +56,7 @@ export default function Calendar() {
   const fetchCanvasTasks = async () => {
     try {
       const userId = localStorage.getItem('userId') || 1;
-      const response = await fetch(`http://localhost:3001/api/tasks?userId=${userId}&source=canvas`);
+      const response = await fetch(`https://schedu-ai-zocp.onrender.com/api/tasks?userId=${userId}&source=canvas`);
       if (response.ok) {
         const data = await response.json();
         const formattedTasks = data.tasks.map(task => ({
@@ -225,7 +225,7 @@ export default function Calendar() {
         content: msg.content
       }));
 
-      const response = await fetch('http://localhost:3001/api/assistant/process', {
+      const response = await fetch('https://schedu-ai-zocp.onrender.com/api/assistant/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -451,7 +451,7 @@ export default function Calendar() {
                     setCanvasLoading(true);
                     try {
                       const userId = localStorage.getItem('userId') || 1;
-                      await fetch(`http://localhost:3001/api/canvas/disconnect`, {
+                      await fetch(`https://schedu-ai-zocp.onrender.com/api/canvas/disconnect`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ userId: parseInt(userId) })

@@ -291,7 +291,7 @@ export default function Assistant() {
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
       // Call the backend API
-      const response = await fetch('http://localhost:3001/api/assistant/process', {
+      const response = await fetch('https://schedu-ai-zocp.onrender.com/api/assistant/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
