@@ -48,7 +48,20 @@ const Profile = () => {
 
   const handleSaveProfile = async () => {
     try {
-      await updateProfile(firstName, lastName, email);
+      // Only send fields that have changed
+      const updates = {};
+      if (firstName !== user?.first_name) updates.firstName = firstName;
+      if (lastName !== user?.last_name) updates.lastName = lastName;
+      if (email !== user?.email) updates.email = email;
+
+      // If nothing changed, don't make API call
+      if (Object.keys(updates).length === 0) {
+        setProfileMessage('No changes to save');
+        setTimeout(() => setProfileMessage(''), 3000);
+        return;
+      }
+
+      await updateProfile(updates);
       setProfileMessage('Profile updated successfully!');
       setTimeout(() => setProfileMessage(''), 3000);
     } catch (error) {
@@ -96,54 +109,28 @@ const Profile = () => {
 
         {/* Profile Information Card */}
         <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl">Profile Information</CardTitle>
-            <CardDescription>Update your personal details and profile picture</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Profile Picture and Subscription Card */}
-            <div className="flex items-start justify-between gap-6">
-              {/* Left: Profile Picture */}
-              <div className="flex items-center gap-6">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src={profileImage} />
-                  <AvatarFallback className="text-2xl bg-gradient-to-r from-[#FF9CA5] to-[#C56C86] text-white">
-                    {(firstName?.[0] || '').toUpperCase()}{(lastName?.[0] || '').toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <Label htmlFor="picture" className="cursor-pointer">
-                    <div className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 transition">
-                      <Camera className="h-5 w-5 text-gray-600" />
-                      <span className="text-sm text-gray-700">Upload Photo</span>
-                    </div>
-                    <Input
-                      id="picture"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageUpload}
-                    />
-                  </Label>
-                  <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF. Max 5MB.</p>
-                </div>
-              </div>
-
-              {/* Right: Subscription Card */}
-              <Card 
-                className="border-2 cursor-pointer hover:shadow-md transition-shadow max-w-xs"
-                style={{ 
-                  borderColor: subscriptionType === 'free-trial' ? '#FF7582' : '#355C7D',
-                  backgroundColor: subscriptionType === 'free-trial' ? '#FFF5F6' : '#F0F4FF'
-                }}
-                onClick={() => setShowSubscriptionDialog(true)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-2">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <div>
+              <CardTitle className="text-2xl">Profile Information</CardTitle>
+              <CardDescription>Update your personal details</CardDescription>
+            </div>
+            {/* Subscription Card in Header */}
+            <Card 
+              className="border-2 cursor-pointer hover:shadow-md transition-shadow flex-shrink-0"
+              style={{ 
+                borderColor: subscriptionType === 'free-trial' ? '#FF7582' : '#355C7D',
+                backgroundColor: subscriptionType === 'free-trial' ? '#FFF5F6' : '#F0F4FF',
+                minWidth: '320px'
+              }}
+              onClick={() => setShowSubscriptionDialog(true)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
                     {subscriptionType === 'free-trial' ? (
-                      <Calendar className="h-5 w-5" style={{ color: '#FF7582' }} />
+                      <Calendar className="h-5 w-5 flex-shrink-0" style={{ color: '#FF7582' }} />
                     ) : (
-                      <Crown className="h-5 w-5" style={{ color: '#355C7D' }} />
+                      <Crown className="h-5 w-5 flex-shrink-0" style={{ color: '#355C7D' }} />
                     )}
                     <div>
                       <p className="font-semibold text-sm">
@@ -161,62 +148,65 @@ const Profile = () => {
                   </div>
                   <Button
                     size="sm"
-                    className="w-full mt-2"
+                    className="flex-shrink-0"
                     style={{ 
                       background: subscriptionType === 'free-trial' 
                         ? 'linear-gradient(to right, #FF7582, #C56C86)' 
-                        : 'linear-gradient(to right, #355C7D, #725A7A)'
+                        : 'linear-gradient(to right, #355C7D, #725A7A)',
+                      color: 'white'
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowSubscriptionDialog(true);
                     }}
                   >
-                    {subscriptionType === 'free-trial' ? 'Upgrade Now' : 'Manage Subscription'}
+                    {subscriptionType === 'free-trial' ? 'Upgrade Now' : 'Manage'}
                   </Button>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </CardContent>
+            </Card>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Profile Fields */}
+            <div className="space-y-4">
+                {/* Name Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Enter first name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input
+                      id="lastName"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Enter last name"
+                    />
+                  </div>
+                </div>
 
-            <Separator />
-
-            {/* Name Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Enter first name"
-                />
+                {/* Email */}
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter email"
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Enter last name"
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter email"
-                  className="pl-10"
-                />
-              </div>
-            </div>
 
             {/* Profile Message */}
             {profileMessage && (
@@ -229,7 +219,7 @@ const Profile = () => {
             <div className="flex justify-end pt-4">
               <Button
                 onClick={handleSaveProfile}
-                className="bg-gradient-to-r from-[#FF7582] to-[#C56C86] hover:opacity-90 text-white font-medium cursor-pointer"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
               >
                 Save Changes
               </Button>
@@ -293,61 +283,9 @@ const Profile = () => {
             <div className="flex justify-end pt-4">
               <Button
                 onClick={handleChangePassword}
-                className="bg-gradient-to-r from-[#355C7D] to-[#725A7A] hover:opacity-90 text-white font-medium cursor-pointer"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
               >
                 Update Password
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Connected Accounts Card */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl flex items-center gap-2">
-              <Link2 className="h-6 w-6" />
-              Connected Accounts
-            </CardTitle>
-            <CardDescription>Manage your calendar integrations and connected services</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Google Calendar */}
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <span className="text-red-600 font-semibold">G</span>
-                </div>
-                <div>
-                  <p className="font-semibold">Google Calendar</p>
-                  <p className="text-sm text-gray-500">Sync your Google Calendar events</p>
-                </div>
-              </div>
-              <Button
-                onClick={handleConnectGoogle}
-                variant="outline"
-                className="hover:cursor-pointer"
-              >
-                Connect
-              </Button>
-            </div>
-
-            {/* Outlook Calendar */}
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                  <span className="text-blue-600 font-semibold">O</span>
-                </div>
-                <div>
-                  <p className="font-semibold">Outlook Calendar</p>
-                  <p className="text-sm text-gray-500">Sync your Outlook Calendar events</p>
-                </div>
-              </div>
-              <Button
-                onClick={handleConnectOutlook}
-                variant="outline"
-                className="hover:cursor-pointer"
-              >
-                Connect
               </Button>
             </div>
           </CardContent>

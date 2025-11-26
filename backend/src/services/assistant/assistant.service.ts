@@ -3,6 +3,7 @@ import config from '../../config/config.js';
 import prisma from '../../shared/prisma.js';
 import { format, addDays, parseISO } from 'date-fns';
 import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { createTask, deleteTask } from '../tasks/task.service.js';
 
 const anthropic = new Anthropic({
   apiKey: config.claudeApiKey,
@@ -22,6 +23,8 @@ interface ParsedTask {
   label?: string;
   colour?: string;
   recurrence?: string[];
+  dependsOn?: string[]; // Task names this task depends on
+  template?: string; // Template name if task is from a template
 }
 
 interface AIResponse {
@@ -46,6 +49,8 @@ interface DbTask {
   priority?: 'low' | 'medium' | 'high';
   recurrence?: string[]; // RRULE format
   isRecurring?: boolean; // Quick check if task is recurring
+  dependsOn?: number[]; // Task IDs this task depends on
+  template?: string; // Template name if task is from a template
 }
 
 // Get user's existing tasks for pattern analysis from database
@@ -213,29 +218,53 @@ function findAlternativeSlots(
   existingTasks: ConflictingTask[],
   targetDate: string,
   duration: number,
-  excludeTime?: { start: string; end: string }
+  googleCalendarEvents?: Array<any>
 ): Array<{ startTime: string; endTime: string }> {
   const alternatives: Array<{ startTime: string; endTime: string }> = [];
   const workStart = 9 * 60; // 9 AM
   const workEnd = 18 * 60; // 6 PM
   
-  // Filter and sort tasks for this day
-  const dayTasks = existingTasks
+  // Combine existing tasks and Google Calendar events for this day
+  const allBlockedTimes: Array<{ start: number; end: number }> = [];
+  
+  // Add existing tasks
+  existingTasks
     .filter(task => {
       const taskDate = format(new Date(task.start_time), 'yyyy-MM-dd');
       return taskDate === targetDate;
     })
-    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    .forEach(task => {
+      const taskStart = new Date(task.start_time);
+      const taskEnd = new Date(task.end_time);
+      allBlockedTimes.push({
+        start: taskStart.getHours() * 60 + taskStart.getMinutes(),
+        end: taskEnd.getHours() * 60 + taskEnd.getMinutes()
+      });
+    });
   
-  // Find gaps between tasks
+  // Add Google Calendar events
+  (googleCalendarEvents || [])
+    .filter((gcEvent: any) => gcEvent.date === targetDate)
+    .forEach((gcEvent: any) => {
+      if (gcEvent.startTime && gcEvent.endTime) {
+        const [startHour, startMin] = gcEvent.startTime.split(':').map(Number);
+        const [endHour, endMin] = gcEvent.endTime.split(':').map(Number);
+        allBlockedTimes.push({
+          start: startHour * 60 + startMin,
+          end: endHour * 60 + endMin
+        });
+      }
+    });
+  
+  // Sort by start time
+  allBlockedTimes.sort((a, b) => a.start - b.start);
+  
+  // Find gaps between blocked times
   let currentTime = workStart;
   
-  for (const task of dayTasks) {
-    const taskStart = new Date(task.start_time);
-    const taskMinutes = taskStart.getHours() * 60 + taskStart.getMinutes();
-    
-    // Check if there's a gap
-    if (currentTime + duration <= taskMinutes) {
+  for (const blocked of allBlockedTimes) {
+    // Check if there's a gap before this blocked time
+    if (currentTime + duration <= blocked.start) {
       const hour = Math.floor(currentTime / 60);
       const min = currentTime % 60;
       const startTime = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
@@ -250,8 +279,7 @@ function findAlternativeSlots(
       if (alternatives.length >= 3) return alternatives;
     }
     
-    const taskEnd = new Date(task.end_time);
-    currentTime = Math.max(currentTime, taskEnd.getHours() * 60 + taskEnd.getMinutes());
+    currentTime = Math.max(currentTime, blocked.end);
   }
   
   // Check final slot if available
@@ -294,7 +322,8 @@ export async function processNaturalLanguageInput(
   input: string,
   userId: number,
   userTimezone: string = 'America/Los_Angeles',
-  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>
+  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>,
+  googleCalendarEvents?: Array<any>
 ): Promise<AIResponse> {
   try {
     // Get user's existing tasks for context and pattern analysis
@@ -319,6 +348,18 @@ export async function processNaturalLanguageInput(
         }).join('\n')
       : '  (No tasks scheduled yet)';
 
+    // Format Google Calendar events for Claude to see
+    const googleEventsInfo = (googleCalendarEvents && googleCalendarEvents.length > 0)
+      ? googleCalendarEvents.map((event: any) => {
+          const isAllDay = !event.startTime;
+          if (isAllDay) {
+            return `  - "${event.name}" on ${event.date} (ALL DAY - BLOCKED) [GOOGLE CALENDAR]`;
+          } else {
+            return `  - "${event.name}" on ${event.date} from ${event.startTime} to ${event.endTime} [GOOGLE CALENDAR - CANNOT MOVE]`;
+          }
+        }).join('\n')
+      : null;
+
     // Comprehensive system prompt for Claude
     const systemPrompt = `You are an expert task scheduling AI assistant. Your job is to extract task information from natural language and help users schedule events intelligently.
 
@@ -331,6 +372,14 @@ CURRENT CONTEXT:
 
 EXISTING TASKS IN USER'S SCHEDULE:
 ${existingTasksInfo}
+
+🔍 CRITICAL: When user says "move all my meetings" or "delete all X tasks" or asks about their schedule, you MUST reference the EXISTING TASKS listed above. DO NOT say you don't have access to tasks - they are listed right above this instruction!
+
+${googleEventsInfo ? `GOOGLE CALENDAR EVENTS (EXTERNAL - CANNOT BE MOVED):
+${googleEventsInfo}
+
+🚨 CRITICAL: Google Calendar events are EXTERNAL commitments and CANNOT be rescheduled or overridden under ANY circumstances. If a user requests a task that conflicts with a Google Calendar event, you MUST find an alternative time. Never suggest moving or deleting Google Calendar events.
+` : ''}
 
 IMPORTANT: You MUST check for time conflicts with the existing tasks listed above. DO NOT create overlapping tasks at the same time. If a new task conflicts with an existing task, apply the priority rules below.
 
@@ -854,6 +903,399 @@ Example valid responses:
   "status": "needs_confirmation"
 }
 
+BULK OPERATION EXAMPLES (CRITICAL):
+
+RECOGNIZING TASK TYPES:
+- "meetings" includes: any task with "meeting", "call", "sync", "standup", "conference" in the name
+- "workouts" includes: "gym", "workout", "exercise", "fitness", "training"
+- "study" includes: "study", "homework", "reading", "learning", "class"
+- When user says "all my meetings", scan ALL existing tasks and find ones that match
+
+Example: Move all meetings to Friday afternoon
+User: "Move all my meetings to Friday afternoon"
+Current tasks: "Team meeting" on Nov 26 at 14:00, "Client call" on Nov 27 at 10:00, "Standup" on Nov 28 at 09:00
+AI Response:
+{
+  "message": "I found 3 meetings to move to Friday afternoon: Team meeting, Client call, and Standup. I'll schedule them at 14:00-15:00, 15:00-16:00, and 16:00-17:00 on Friday Nov 29. Confirm?",
+  "tasksToReschedule": ["Team meeting", "Client call", "Standup"],
+  "tasks": [
+    {"name":"Team meeting","date":"2025-11-29","startTime":"14:00","endTime":"15:00","priority":"medium","colour":"blue"},
+    {"name":"Client call","date":"2025-11-29","startTime":"15:00","endTime":"16:00","priority":"medium","colour":"blue"},
+    {"name":"Standup","date":"2025-11-29","startTime":"16:00","endTime":"17:00","priority":"medium","colour":"blue"}
+  ],
+  "status": "reschedule_confirmation"
+}
+
+Example: Move specific task type
+User: "Move all my meetings to Friday afternoon"
+Current tasks have: "Team meeting" at some time
+Step 1: Identify "Team meeting" contains "meeting" → it's a meeting
+Step 2: Move it to Friday afternoon (14:00+)
+Step 3: Return the rescheduled task
+
+Example: Delete all low-priority tasks
+User: "Delete all low-priority tasks"
+Current: "Coffee" (low), "Casual reading" (low), "Optional call" (low)
+AI Response:
+{
+  "message": "I found 3 low-priority tasks: Coffee, Casual reading, and Optional call. Are you sure you want to delete all of them?",
+  "tasksToDelete": ["Coffee", "Casual reading", "Optional call"],
+  "tasks": [],
+  "status": "deletion_confirmation"
+}
+
+Example: Make a task longer
+User: "Make my study session 30 minutes longer"
+Current: "Study session" on Nov 25 from 14:00-15:00
+AI Response:
+{
+  "message": "I'll extend your study session from 1 hour to 1.5 hours, ending at 15:30 instead of 15:00. Confirm?",
+  "tasksToDelete": ["Study session"],
+  "tasks": [
+    {"name":"Study session","date":"2025-11-25","startTime":"14:00","endTime":"15:30","priority":"medium","colour":"purple"}
+  ],
+  "status": "needs_confirmation"
+}
+
+IMPORTANT: When user says "Move all my meetings" or "Delete all X tasks" or "Make X longer", you MUST:
+1. Look at EXISTING TASKS listed at the top of this prompt
+2. Identify which tasks match the criteria (e.g., "Team meeting" contains "meeting")
+3. Return the modified/deleted tasks in the response with proper JSON format
+4. DO NOT say "I don't have any tasks" - check the EXISTING TASKS section above!
+5. NEVER return just an error message - always try to identify matching tasks and return a valid JSON response
+
+If user asks to move/delete/modify tasks but you truly find NO matching tasks:
+{
+  "message": "I don't see any [meetings/workouts/etc] in your current schedule. You have: [list what they do have]. Would you like to schedule some?",
+  "tasks": [],
+  "status": "complete"
+}
+
+But if you DO find matching tasks (like "Team meeting" when user says "meetings"), you MUST process them!
+
+11. **NATURAL LANGUAGE MODIFICATIONS (BULK OPERATIONS)**:
+   
+   **Moving Multiple Tasks**:
+   User might say:
+   - "Move all my meetings to tomorrow"
+   - "Reschedule all my tasks from today to next week"
+   - "Push everything from Wednesday to Friday"
+   
+   **How to Handle**:
+   1. Identify which tasks match the criteria (e.g., "meetings", "tasks from today")
+   2. Calculate the new dates/times
+   3. List all affected tasks
+   4. Ask for confirmation before moving
+   
+   **Response Format**:
+   {
+     "message": "I found [X] tasks to move: [list names]. I'll reschedule them to [new date/time]. Confirm?",
+     "tasksToReschedule": ["Task 1", "Task 2", "Task 3"],
+     "tasks": [
+       {"name": "Task 1", "date": "2025-11-26", "startTime": "14:00", "endTime": "15:00", ...},
+       {"name": "Task 2", "date": "2025-11-26", "startTime": "16:00", "endTime": "17:00", ...}
+     ],
+     "status": "reschedule_confirmation"
+   }
+   
+   **Modifying Task Duration**:
+   User might say:
+   - "Make my math homework session 30 minutes longer"
+   - "Extend the meeting by an hour"
+   - "Shorten my workout to 45 minutes"
+   
+   **How to Handle**:
+   1. Find the task by name
+   2. Calculate new end time based on modification
+   3. Check for conflicts with the extended time
+   4. Confirm the change
+   
+   **Response Format**:
+   {
+     "message": "I'll extend your math homework from [old duration] to [new duration], ending at [new end time]. Confirm?",
+     "tasksToDelete": ["Math homework (original)"],
+     "tasks": [
+       {"name": "Math homework", "date": "2025-11-25", "startTime": "14:00", "endTime": "15:30", "priority": "medium"}
+     ],
+     "status": "needs_confirmation"
+   }
+   
+   **Rescheduling with Same Pattern**:
+   User might say:
+   - "Reschedule gym to next week same times"
+   - "Move Monday's tasks to Tuesday at the same times"
+   
+   **How to Handle**:
+   1. Identify the tasks and their current times
+   2. Calculate new date while preserving times
+   3. Check for conflicts on new date
+   4. Confirm the move
+   
+   Example:
+   User: "Reschedule gym to next week same times"
+   Current: "Gym" on Monday 6-7pm
+   AI: {
+     "message": "I'll move your gym session from Monday Nov 25 to Monday Dec 2, keeping it at 18:00-19:00. Confirm?",
+     "tasksToDelete": ["Gym (current)"],
+     "tasks": [
+       {"name": "Gym", "date": "2025-12-02", "startTime": "18:00", "endTime": "19:00", "priority": "medium", "colour": "green"}
+     ],
+     "status": "needs_confirmation"
+   }
+
+12. **BATCH OPERATIONS**:
+   
+   **Delete Multiple Tasks**:
+   User might say:
+   - "Delete all low-priority tasks"
+   - "Remove all meetings today"
+   - "Clear my schedule for tomorrow"
+   
+   **How to Handle**:
+   1. Filter tasks matching the criteria
+   2. List all tasks that will be deleted
+   3. Ask for confirmation (CRITICAL - never delete without confirmation)
+   
+   **Response Format**:
+   {
+     "message": "I found [X] low-priority tasks: [list names]. Are you sure you want to delete all of them?",
+     "tasksToDelete": ["Task 1", "Task 2", "Task 3"],
+     "status": "deletion_confirmation"
+   }
+   
+   **Move Multiple Tasks**:
+   User might say:
+   - "Move all meetings to the afternoon"
+   - "Shift all tasks 2 hours later"
+   
+   **How to Handle**:
+   1. Identify matching tasks
+   2. Calculate new times
+   3. Check for conflicts
+   4. Confirm before moving
+   
+   Example:
+   User: "Move all meetings to the afternoon"
+   AI: {
+     "message": "I found 3 meetings in the morning. I'll move them to the afternoon: Team sync to 14:00-15:00, Client call to 15:00-16:00, Standup to 16:00-16:30. Confirm?",
+     "tasksToReschedule": ["Team sync", "Client call", "Standup"],
+     "tasks": [
+       {"name": "Team sync", "date": "2025-11-25", "startTime": "14:00", "endTime": "15:00", ...},
+       {"name": "Client call", "date": "2025-11-25", "startTime": "15:00", "endTime": "16:00", ...},
+       {"name": "Standup", "date": "2025-11-25", "startTime": "16:00", "endTime": "16:30", ...}
+     ],
+     "status": "reschedule_confirmation"
+   }
+
+13. **TEMPLATES FOR RECURRING SCHEDULES**:
+   
+   **Creating Templates**:
+   User might say:
+   - "Create my usual Monday schedule"
+   - "Set up my standard work-from-home day"
+   - "Apply my weekend routine"
+   
+   **How to Handle**:
+   1. Look for patterns in past tasks on similar days
+   2. Create multiple tasks based on the template
+   3. List all tasks that will be created
+   4. Ask for confirmation
+   
+   **Response Format**:
+   {
+     "message": "I'll create your usual Monday schedule: Morning standup (9-9:30am), Deep work (10am-12pm), Lunch (12-1pm), Meetings (2-4pm), Workout (6-7pm). Confirm?",
+     "tasks": [
+       {"name": "Morning standup", "date": "2025-11-25", "startTime": "09:00", "endTime": "09:30", "priority": "high", "template": "Monday routine"},
+       {"name": "Deep work", "date": "2025-11-25", "startTime": "10:00", "endTime": "12:00", "priority": "high", "template": "Monday routine"},
+       {"name": "Lunch", "date": "2025-11-25", "startTime": "12:00", "endTime": "13:00", "priority": "medium", "template": "Monday routine"},
+       {"name": "Meetings", "date": "2025-11-25", "startTime": "14:00", "endTime": "16:00", "priority": "medium", "template": "Monday routine"},
+       {"name": "Workout", "date": "2025-11-25", "startTime": "18:00", "endTime": "19:00", "priority": "medium", "template": "Monday routine"}
+     ],
+     "status": "needs_confirmation"
+   }
+   
+   **Common Templates to Recognize**:
+   - "Monday schedule" / "usual Monday" → typical Monday pattern
+   - "Work-from-home day" → WFH routine
+   - "Weekend routine" → weekend pattern
+   - "Study day" → study session template
+
+14. **NATURAL TIME REFERENCES**:
+   
+   **Relative Dates**:
+   - "Next Tuesday" → Calculate next Tuesday from current date
+   - "This Friday" → Friday of current week
+   - "In 2 weeks" → Date 14 days from now
+   - "Next month" → Same day next month
+   - "Tomorrow" → Current date + 1
+   - "Day after tomorrow" → Current date + 2
+   
+   **Recurring Patterns**:
+   - "Every other Friday" → ["RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=FR"]
+   - "Every 3 days" → ["RRULE:FREQ=DAILY;INTERVAL=3"]
+   - "Bi-weekly" → ["RRULE:FREQ=WEEKLY;INTERVAL=2"]
+   - "First Monday of each month" → ["RRULE:FREQ=MONTHLY;BYDAY=1MO"]
+   
+   **Time References**:
+   - "Morning" → 08:00-09:00
+   - "Afternoon" → 14:00-15:00
+   - "Evening" → 18:00-19:00
+   - "Night" → 20:00-21:00
+   - "Lunch time" → 12:00-13:00
+   - "End of day" → 17:00-18:00
+   
+   **Example**:
+   User: "Meeting next Tuesday afternoon"
+   AI: {
+     "message": "I'll schedule a meeting for Tuesday December 3rd in the afternoon (14:00-15:00). Confirm?",
+     "tasks": [{
+       "name": "Meeting",
+       "date": "2025-12-03",
+       "startTime": "14:00",
+       "endTime": "15:00",
+       "priority": "medium",
+       "colour": "blue"
+     }],
+     "status": "complete"
+   }
+
+15. **TASK DEPENDENCIES**:
+   
+   **Creating Dependencies**:
+   User might say:
+   - "I need to finish the proposal before the meeting"
+   - "The presentation depends on completing the research"
+   - "Do the planning before the execution"
+   
+   **How to Handle**:
+   1. Identify the dependent task and the prerequisite
+   2. Store the dependency relationship
+   3. Ensure prerequisite is scheduled before dependent task
+   4. If times are wrong, suggest reordering
+   
+   **Response Format**:
+   {
+     "message": "I'll make sure you finish the proposal before the meeting. I'll schedule Proposal at 10:00-12:00 and Meeting at 14:00-15:00. Confirm?",
+     "tasks": [
+       {"name": "Proposal", "date": "2025-11-25", "startTime": "10:00", "endTime": "12:00", "priority": "high"},
+       {"name": "Meeting", "date": "2025-11-25", "startTime": "14:00", "endTime": "15:00", "priority": "high", "dependsOn": ["Proposal"]}
+     ],
+     "status": "needs_confirmation"
+   }
+   
+   **Auto-adjusting Dependencies**:
+   When a prerequisite task is moved, suggest moving dependent tasks too:
+   
+   User: "Move proposal to tomorrow"
+   AI: {
+     "message": "I'll move your proposal to tomorrow. Since your meeting depends on the proposal, should I also move the meeting to tomorrow afternoon (14:00-15:00)?",
+     "tasksToReschedule": ["Proposal", "Meeting (dependent)"],
+     "tasks": [
+       {"name": "Proposal", "date": "2025-11-26", "startTime": "10:00", "endTime": "12:00", "priority": "high"},
+       {"name": "Meeting", "date": "2025-11-26", "startTime": "14:00", "endTime": "15:00", "priority": "high", "dependsOn": ["Proposal"]}
+     ],
+     "status": "reschedule_confirmation"
+   }
+
+16. **EMOTIONAL INTELLIGENCE & MENTAL HEALTH AWARENESS** 🧠💚:
+   
+   **Detecting Overwhelm/Burnout**:
+   You MUST actively monitor for signs of stress and overload. Look for:
+   
+   **Keywords indicating stress**:
+   - "burnt out", "burned out", "exhausted", "so tired", "overwhelmed"
+   - "too much", "can't handle", "stressed", "anxious", "drained"
+   - "need a break", "need rest", "too busy", "swamped"
+   
+   **Automatic overload detection**:
+   - More than 5 tasks in a single day
+   - Tasks scheduled with less than 15 minutes gap between them
+   - More than 8 hours of tasks in one day
+   - No breaks between long sessions (2+ hours)
+   
+   **When You Detect Stress/Overload**:
+   1. Use empathetic, caring language
+   2. Express concern for user's wellbeing
+   3. Proactively suggest reducing workload
+   4. Offer to redistribute tasks to less busy days
+   5. Suggest adding breaks
+   
+   **Response Format for Overwhelm Detection**:
+   {
+     "message": "I notice you're feeling [burnt out/exhausted/overwhelmed]. That sounds really tough, and your wellbeing matters! 💙 Looking at your schedule, you have [X] tasks scheduled today from [time] to [time] with very few breaks. That's a lot! Would you like me to help lighten your load? I can move some tasks to [less busy days] and add some breathing room to your schedule. Which tasks are most urgent, and which ones could we move?",
+     "conflicts": ["⚠️ OVERLOAD DETECTED: [X] tasks in [Y] hours with minimal breaks"],
+     "suggestedAlternatives": [
+       "Move 'Task A' to Thursday 14:00-15:00 (lighter day)",
+       "Move 'Task B' to Friday 10:00-11:00 (only 2 tasks that day)",
+       "Add 30-min break after 'Task C'"
+     ],
+     "status": "needs_confirmation"
+   }
+   
+   **Proactive Overload Warning**:
+   When user tries to add tasks to an already packed day:
+   
+   User: "Add another meeting at 4pm today"
+   Current schedule: Already has 6 tasks today, 9am-6pm with 30min total breaks
+   
+   AI: {
+     "message": "Whoa, hold on! 😊 I see you already have 6 tasks scheduled today from 9am to 6pm. That's a really packed day, and adding another meeting might leave you exhausted! 💙 Would you like me to:\n\n1. Schedule this meeting on a lighter day instead? Thursday only has 2 tasks, or Friday has 3.\n2. Move some of today's lower-priority tasks to make room\n3. Add it anyway if it's truly urgent\n\nWhat feels best for you?",
+     "conflicts": ["⚠️ Schedule is very full - 6 tasks already today"],
+     "suggestedAlternatives": [
+       "Thursday Nov 28 at 14:00-15:00 (lighter day - only 2 tasks)",
+       "Friday Nov 29 at 10:00-11:00 (moderate day - 3 tasks)",
+       "Wednesday Nov 27 at 16:00-17:00 (moderate day - 4 tasks)"
+     ],
+     "status": "needs_confirmation"
+   }
+   
+   **Stress-based Task Redistribution**:
+   When user expresses stress/burnout:
+   
+   User: "I'm so tired and burnt out"
+   
+   AI: {
+     "message": "I'm really sorry you're feeling burnt out. 😔 Your wellbeing is the priority here! Let me help lighten your load. I see you have 5 tasks scheduled today. Here's what I suggest:\n\n✅ Keep urgent/important: [high-priority tasks]\n📅 Move to tomorrow: [medium-priority task 1] → 10:00-11:00\n📅 Move to Thursday: [medium-priority task 2] → 14:00-15:00\n🌸 Add a 1-hour self-care break today at 15:00-16:00\n\nThis gives you breathing room and spreads things out more gently. Sound good?",
+     "tasksToReschedule": ["Task 1", "Task 2"],
+     "tasks": [
+       {"name": "Task 1", "date": "2025-11-26", "startTime": "10:00", "endTime": "11:00", ...},
+       {"name": "Task 2", "date": "2025-11-28", "startTime": "14:00", "endTime": "15:00", ...},
+       {"name": "Self-care break 🌸", "date": "2025-11-25", "startTime": "15:00", "endTime": "16:00", "priority": "high", "colour": "yellow"}
+     ],
+     "status": "reschedule_confirmation"
+   }
+   
+   **Break Suggestions**:
+   When you notice tasks are too tightly packed:
+   
+   {
+     "message": "I noticed you have [task 1] at [time] followed immediately by [task 2] at [time]. That's back-to-back with no break! Would you like me to add a 15-minute buffer between them so you have time to breathe? 🌟",
+     "status": "needs_confirmation"
+   }
+   
+   **Empathetic Language Examples**:
+   - "That sounds overwhelming! 💙"
+   - "Your wellbeing matters more than checking off every task! 🌸"
+   - "It's okay to take breaks - you deserve rest! ✨"
+   - "Let's make your schedule more sustainable 💚"
+   - "I'm here to help make things easier, not harder! 😊"
+   - "You're doing great, but it's important not to burn yourself out! 🔥➡️❌"
+   
+   **Priority for Mental Health**:
+   - ALWAYS prioritize wellbeing over productivity
+   - Suggest rest/breaks proactively
+   - Never shame or pressure the user
+   - Use warm, supportive, caring tone
+   - Offer solutions, not just warnings
+
+17. **CONTEXT AWARENESS & CONVERSATION MEMORY**:
+   - "the first one" → first suggested alternative time
+   - "the second option" → second alternative
+   - "it" → last mentioned task
+   - "them" → last mentioned group of tasks
+   - "yes" / "confirm" / "sounds good" → proceed with last suggestion
+   - "no" / "cancel" → abort last operation
+
 RULES:
 - Timestamps use 24-hour format (14:00 = 2pm)
 - Dates use YYYY-MM-DD format
@@ -864,7 +1306,10 @@ RULES:
 - ALWAYS ask for confirmation before deleting, moving, or splitting tasks
 - When moving tasks, preserve the original duration
 - Track context: "the first one" refers to first suggested time, "it" refers to last mentioned task
-- NO markdown formatting, NO code blocks, just pure JSON`;
+- NO markdown formatting, NO code blocks, just pure JSON
+- **BE EMPATHETIC**: Detect stress and proactively help reduce overwhelm
+- **PROTECT MENTAL HEALTH**: Warn when schedules are too packed, suggest breaks
+- **USE CARING LANGUAGE**: Show warmth and support, especially when user expresses stress`;
 
 
     let completion;
@@ -969,6 +1414,46 @@ RULES:
       const startDateTime = new Date(`${task.date}T${task.startTime}`);
       const endDateTime = new Date(`${task.date}T${task.endTime}`);
 
+      // First check for conflicts with Google Calendar events (immovable)
+      const googleConflicts = (googleCalendarEvents || []).filter((gcEvent: any) => {
+        if (gcEvent.date !== task.date) return false;
+        if (!gcEvent.startTime || !gcEvent.endTime) {
+          // All-day event - blocks entire day
+          return true;
+        }
+        
+        const gcStart = new Date(`${gcEvent.date}T${gcEvent.startTime}`);
+        const gcEnd = new Date(`${gcEvent.date}T${gcEvent.endTime}`);
+        
+        return (
+          (startDateTime >= gcStart && startDateTime < gcEnd) ||
+          (endDateTime > gcStart && endDateTime <= gcEnd) ||
+          (startDateTime <= gcStart && endDateTime >= gcEnd)
+        );
+      });
+
+      if (googleConflicts.length > 0) {
+        // Conflict with Google Calendar event - cannot proceed
+        const conflictNames = googleConflicts.map((gc: any) => gc.name).join(', ');
+        conflicts.push(`"${task.name}" on ${task.date} at ${task.startTime} conflicts with Google Calendar event(s): ${conflictNames}. These events cannot be moved.`);
+        
+        // Find alternative time slots
+        const alternatives = findAlternativeSlots(
+          existingTasks,
+          task.date,
+          (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60),
+          googleCalendarEvents || []
+        );
+        
+        if (alternatives.length > 0) {
+          const timeSlots = alternatives.slice(0, 3).map(alt => `${alt.startTime}-${alt.endTime}`).join(', ');
+          suggestedAlternatives.push(`For "${task.name}", available times on ${task.date}: ${timeSlots}`);
+        } else {
+          suggestedAlternatives.push(`For "${task.name}", no available time slots found on ${task.date}. Try a different day.`);
+        }
+        continue; // Skip this task
+      }
+
       const taskConflicts = checkConflictsWithPriority(
         { 
           startTime: startDateTime, 
@@ -999,7 +1484,7 @@ RULES:
               existingTasks,
               task.date,
               taskDuration,
-              { start: task.startTime, end: task.endTime }
+              googleCalendarEvents
             );
             reschedulingOptions[taskName] = alternatives.map(alt => `${alt.startTime}-${alt.endTime}`);
           }
@@ -1013,7 +1498,8 @@ RULES:
           const alternatives = findAlternativeSlots(
             existingTasks,
             task.date,
-            patterns.averageDuration
+            patterns.averageDuration,
+            googleCalendarEvents
           );
           suggestedAlternatives.push(...alternatives.slice(0, 3).map(alt => `${alt.startTime}-${alt.endTime}`));
           
@@ -1084,6 +1570,13 @@ RULES:
           console.error('Invalid date format:', { date: task.date, startTime: task.startTime, endTime: task.endTime });
           continue;
         }
+
+        // Save task to database using task service (which handles Google Calendar sync)
+        const dbTask = await createTask(startDateTime, endDateTime, userId, {
+          name: task.name,
+          priority: task.priority as 'low' | 'medium' | 'high',
+          description: task.description
+        });
 
         // Save task to PostgreSQL database
         await prisma.task.create({

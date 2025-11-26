@@ -52,7 +52,6 @@ export default function Sidebar() {
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/calendar', icon: Calendar, label: 'Calendar' },
     { to: '/tasks', icon: ListTodo, label: 'Tasks' },
-    { to: '/stats', icon: BarChart3, label: 'Stats' },
   ];
 
   const NavLink = ({ to, icon: Icon, children }) => {
@@ -107,21 +106,6 @@ export default function Sidebar() {
       <div className="space-y-3 mt-6">
         <Separator className="bg-slate-200" />
 
-        {/* Settings Button */}
-        <Link to="/settings">
-          <Button
-            variant="ghost"
-            className={`w-full ${
-              isCollapsed ? 'justify-center' : 'justify-start'
-            } text-slate-600 hover:text-slate-900 hover:bg-blue-50/60 gap-3 transition-colors duration-200 ${
-              location.pathname === '/settings' ? 'bg-blue-100 text-blue-900 font-semibold' : ''
-            }`}
-          >
-            <SettingsIcon className="h-5 w-5 flex-shrink-0" />
-            {!isCollapsed && <span>Settings</span>}
-          </Button>
-        </Link>
-
         {/* User Profile */}
         <Link to="/profile">
           <div
@@ -144,6 +128,21 @@ export default function Sidebar() {
             )}
           </div>
         </Link>
+
+        {/* Settings Button - Commented out for now */}
+        {/* <Link to="/settings">
+          <Button
+            variant="ghost"
+            className={`w-full ${
+              isCollapsed ? 'justify-center' : 'justify-start'
+            } text-slate-600 hover:text-slate-900 hover:bg-blue-50/60 gap-3 transition-colors duration-200 ${
+              location.pathname === '/settings' ? 'bg-blue-100 text-blue-900 font-semibold' : ''
+            }`}
+          >
+            <SettingsIcon className="h-5 w-5 flex-shrink-0" />
+            {!isCollapsed && <span>Settings</span>}
+          </Button>
+        </Link> */}
 
         {/* Logout Button */}
         <Button

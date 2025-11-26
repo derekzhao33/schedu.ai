@@ -25,7 +25,7 @@ export default function AIChat({
   return (
     <div className="w-[360px] border-l flex flex-col" style={{ background: '#ffffff', borderColor: '#e5e7eb' }}>
       {/* AI Chat Header */}
-      <div className="p-4 border-b flex items-center gap-2.5" style={{ borderColor: '#e5e7eb', background: '#f8f9fa' }}>
+      <div className="p-6 pb-4.5 border-b flex items-center gap-2.5" style={{ borderColor: '#e5e7eb', background: '#f8f9fa' }}>
         <div className="flex-shrink-0 rounded-full p-2 flex items-center justify-center" style={{
           width: 36,
           height: 36,

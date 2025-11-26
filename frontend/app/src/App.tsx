@@ -17,7 +17,7 @@ import Calendar from './pages/Calendar/index.jsx'
 // @ts-ignore
 import Tasks from './pages/Tasks.jsx'
 // @ts-ignore
-import Settings from './pages/Settings.jsx'
+// import Settings from './pages/Settings.jsx'
 // @ts-ignore
 import Profile from './pages/Profile.jsx'
 // @ts-ignore
@@ -46,22 +46,19 @@ function AppContent() {
       <Router>
         <div className="app-container">
           {isAuthenticated ? (
-            // Authenticated routes with sidebar
-            <div className="flex">
-              <SidebarProvider>
-                <>
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/calendar" element={<Calendar />} />
-                    <Route path="/tasks" element={<Tasks />} />
-                    <Route path="/assistant" element={<Assistant />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </>
-              </SidebarProvider>
-            </div>
+            <SidebarProvider>
+            <>
+                <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/tasks" element={<Tasks />} />
+                <Route path="/assistant" element={<Assistant />} />
+                {/* <Route path="/settings" element={<Settings />} /> */}
+                <Route path="/profile" element={<Profile />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </>
+            </SidebarProvider>
           ) : (
             // Auth routes
             <Routes>

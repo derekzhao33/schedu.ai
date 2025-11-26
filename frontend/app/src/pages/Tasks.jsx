@@ -71,7 +71,7 @@ export default function Tasks() {
               return (
                 <div
                   key={index}
-                  className="p-6 rounded-3xl shadow-lg cursor-pointer hover:scale-[1.02] transition-all"
+                  className="p-6 rounded-3xl shadow-lg cursor-pointer hover:scale-[1.01] transition-all duration-700 ease-out"
                   style={{
                     backgroundColor: taskColor,
                     border: `2px solid ${taskColor}`,

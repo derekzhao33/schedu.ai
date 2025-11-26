@@ -15,13 +15,13 @@ export default function WeekView({
   const SLOT_HEIGHT = 50; // Height in pixels for each hour slot
 
   return (
-    <div className="overflow-x-auto mt-3 flex-1 px-3">
-      <div className="flex flex-row w-full h-full mx-auto">
+    <div className="overflow-x-auto mt-3 flex-1 px-3" style={{ paddingBottom: '32px' }}>
+      <div className="flex flex-row w-full h-full mx-auto" style={{ marginBottom: '24px' }}>
         {/* Time column */}
         <div className="flex flex-col flex-shrink-0" style={{width: 60, marginRight: 8}}>
           <div style={{height: SLOT_HEIGHT, minHeight: SLOT_HEIGHT}} />
           {hours.map(h => (
-            <div key={h} className="flex items-center justify-end text-xs text-slate-500 font-medium" style={{height: SLOT_HEIGHT, minHeight: SLOT_HEIGHT, paddingRight: 6, lineHeight: 1}}>
+            <div key={h} className="flex items-start justify-end text-xs text-slate-500 font-medium" style={{height: SLOT_HEIGHT, minHeight: SLOT_HEIGHT, paddingRight: 6, lineHeight: 1, transform: 'translateY(-6px)'}}>
               {format(setHours(new Date(), h), "h a")}
             </div>
           ))}
@@ -32,7 +32,7 @@ export default function WeekView({
             const dayEvents = getTimeline(allEvents, day);
             const dayTasks = getTasksForDay(tasks, day);
             return (
-              <div key={dayIdx} className="relative flex flex-col h-full rounded-xl" style={{minWidth: 100, flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', animation: 'liquify-week 5s ease-in-out infinite'}}>
+              <div key={dayIdx} className="relative flex flex-col h-full rounded-xl" style={{minWidth: 100, flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'}}>
                 {/* Day header */}
                 <div className="sticky top-0 z-10 rounded-t-xl p-2 text-center font-semibold border-b flex items-center justify-center" style={{height: SLOT_HEIGHT, color: '#374151', background: '#f3f4f6', borderBottomColor: '#e5e7eb', fontSize: '12px'}}>{format(day, "EEE d")}</div>
                 {/* Timeline slots */}

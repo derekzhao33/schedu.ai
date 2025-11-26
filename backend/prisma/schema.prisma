@@ -19,6 +19,11 @@ model User {
     last_name String
     email String @unique
     password String
+    google_access_token String?
+    google_refresh_token String?
+    google_token_expiry DateTime?
+    google_calendar_sync_token String?
+    google_calendar_last_sync DateTime?
     tasks Task[]
 }
 
@@ -30,6 +35,7 @@ model Task {
     description String?
     priority String?
     color String?
+    google_event_id String?
     user User @relation(fields: [user_id], references: [id])
     user_id Int
 }

@@ -24,7 +24,7 @@ if (typeof document !== 'undefined') {
 }
 
 export default function Calendar() {
-  const { events, tasks, addTask, deleteTask, completeTask, syncGoogleCalendarEvents, getAllEvents, fetchTasks } = useSchedule();
+  const { events, tasks, addTask, deleteTask, completeTask, syncGoogleCalendarEvents, getAllEvents, fetchTasks, googleCalendarEvents } = useSchedule();
   const { openAddTaskModal, openTaskDetailsModal } = useModal();
   const { theme } = useThemeSettings();
   const { isCollapsed } = useSidebar();
@@ -196,6 +196,7 @@ export default function Calendar() {
           userId: 1,
           userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           conversationHistory,
+          googleCalendarEvents,
         }),
       });
 

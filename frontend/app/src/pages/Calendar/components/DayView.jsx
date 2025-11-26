@@ -16,9 +16,9 @@ export default function DayView({
   const todaysTasks = getTasksForDay(tasks, selectedDate);
 
   return (
-    <div className="mt-3 flex flex-col flex-1 min-h-0 overflow-hidden px-3" style={{ background: 'transparent', minHeight: 0 }}>
-      <div className="text-base font-semibold mb-2 max-w-full mx-auto w-full" style={{ color: '#374151' }}>Timeline</div>
-      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+    <div className="mt-3 flex flex-col flex-1 min-h-0 overflow-hidden px-3 pb-6 pt-4" style={{ background: 'transparent', minHeight: 0 }}>
+      <div className="text-base font-semibold mb-4 max-w-full mx-auto w-full" style={{ color: '#374151' }}>Timeline</div>
+      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-4">
         <div className="flex flex-row max-w-full mx-auto w-full gap-0">
           {/* Time labels */}
           <div className="flex flex-col flex-shrink-0" style={{width: 50}}>
@@ -29,7 +29,7 @@ export default function DayView({
             ))}
           </div>
           {/* Timeline slots and events inside white area */}
-          <div className="relative flex-1 flex flex-col rounded-xl shadow-sm border ml-2" style={{ background: PRIMARY_LIGHT, border: `1px solid ${BORDER_COLOR}`, minHeight: 1152, height: 1152, animation: 'liquify-day 4s ease-in-out infinite' }}>
+          <div className="relative flex-1 flex flex-col rounded-xl shadow-sm border ml-2" style={{ background: PRIMARY_LIGHT, border: `1px solid ${BORDER_COLOR}`, minHeight: 1152, height: 1152, boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)' }}>
             {/* Time slots */}
             <div className="flex flex-col" style={{height: 1152}}>
               {Array.from({ length: TIME_END - TIME_START }, (_, i) => (

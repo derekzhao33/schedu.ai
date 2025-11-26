@@ -20,8 +20,8 @@ export default function MonthView({
   const today = new Date();
 
   return (
-    <div className="flex-1 overflow-y-auto px-3">
-      <div className="grid grid-cols-7 gap-3 mt-3 min-h-[calc(100vh-220px)] mx-auto" style={{alignItems: 'stretch'}}>
+    <div className="flex-1 overflow-y-auto px-3 pb-6">
+      <div className="grid grid-cols-7 gap-3 mt-3 mb-4 min-h-[calc(100vh-220px)] mx-auto" style={{alignItems: 'stretch'}}>
         {days.map((d, i) => {
           const dayTasks = getTasksForDay(tasks, d);
           const dayEvents = getTimeline(allEvents, d);
@@ -38,9 +38,7 @@ export default function MonthView({
                 minHeight: 130,
                 boxShadow: isToday ? '0 2px 8px rgba(108, 117, 125, 0.2)' : '0 1px 2px rgba(0, 0, 0, 0.05)',
                 transition: 'all 0.3s ease',
-                cursor: 'default',
-                animation: isCurrentMonth ? 'liquify-week 6s ease-in-out infinite' : 'none',
-                animationDelay: `${i * 0.1}s`
+                cursor: 'default'
               }}
               onMouseEnter={(e) => {
                 if (isCurrentMonth && !isToday) {

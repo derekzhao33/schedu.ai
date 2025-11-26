@@ -8,7 +8,9 @@
       "Bash(timeout /t 3)",
       "Bash(npm run:*)",
       "Bash(touch:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []
