@@ -164,7 +164,7 @@ export async function createTask(
     priority?: string,
     color?: string
 ): Promise<Task> {
-    return await prisma.task.create({
+    const task = await prisma.task.create({
         data: { 
             start_time, 
             end_time, 

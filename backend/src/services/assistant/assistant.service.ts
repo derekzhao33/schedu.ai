@@ -1572,24 +1572,15 @@ RULES:
         }
 
         // Save task to database using task service (which handles Google Calendar sync)
-        const dbTask = await createTask(startDateTime, endDateTime, userId, {
-          name: task.name,
-          priority: task.priority as 'low' | 'medium' | 'high',
-          description: task.description
-        });
-
-        // Save task to PostgreSQL database
-        await prisma.task.create({
-          data: {
-            start_time: startDateTime,
-            end_time: endDateTime,
-            user_id: userId,
-            name: task.name,
-            description: task.description || task.label,
-            priority: task.priority || 'medium',
-            color: task.colour
-          }
-        });
+        await createTask(
+          startDateTime,
+          endDateTime,
+          userId,
+          task.name,
+          task.description || task.label,
+          task.priority || 'medium',
+          task.colour
+        );
         
         tasksCreated++;
         createdTasks.push(task);
