@@ -43,11 +43,11 @@ router.get('/auth/callback', async (req, res) => {
     });
 
     // Redirect back to frontend
-    const frontendUrl = process.env.FRONTEND_URL || 'https://schedu-ai-zocp.onrender.com';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     res.redirect(`${frontendUrl}?google_auth=success`);
   } catch (error) {
     console.error('Error handling callback:', error);
-    const frontendUrl = process.env.FRONTEND_URL || 'https://schedu-ai-zocp.onrender.com';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     res.redirect(`${frontendUrl}?google_auth=error`);
   }
 });
