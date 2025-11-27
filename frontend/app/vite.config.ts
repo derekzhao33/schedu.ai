@@ -17,4 +17,9 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
   },
+  preview: {
+    allowedHosts: [
+        'flowify-frontend.onrender.com'
+    ]
+  }
 })

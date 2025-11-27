@@ -5,6 +5,11 @@ CREATE TABLE "User" (
     "last_name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "password" TEXT NOT NULL,
+    "google_access_token" TEXT,
+    "google_refresh_token" TEXT,
+    "google_token_expiry" TIMESTAMP(3),
+    "google_calendar_sync_token" TEXT,
+    "google_calendar_last_sync" TIMESTAMP(3),
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -14,6 +19,11 @@ CREATE TABLE "Task" (
     "id" SERIAL NOT NULL,
     "start_time" TIMESTAMP(3) NOT NULL,
     "end_time" TIMESTAMP(3) NOT NULL,
+    "name" TEXT,
+    "description" TEXT,
+    "priority" TEXT,
+    "color" TEXT,
+    "google_event_id" TEXT,
     "user_id" INTEGER NOT NULL,
 
     CONSTRAINT "Task_pkey" PRIMARY KEY ("id")

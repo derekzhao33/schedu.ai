@@ -296,7 +296,7 @@ export default function Assistant() {
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
       // Call the backend API
-      const response = await fetch('http://localhost:3001/api/assistant/process', {
+      const response = await fetch('https://schedu-ai-zocp.onrender.com/api/assistant/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +328,7 @@ export default function Assistant() {
       const errorMessage = {
         id: Date.now() + 1,
         type: "assistant",
-        content: `Failed to fetch response from the assistant. Please make sure the backend server is running on port 3000. Error: ${error.message}`,
+        content: `Failed to fetch response from the assistant. Please make sure the backend server is running on port 3001. Error: ${error.message}`,
         timestamp: new Date().toISOString(),
       };
       

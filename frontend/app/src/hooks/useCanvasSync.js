@@ -15,7 +15,7 @@ export function useCanvasSync() {
 
     try {
       console.log('Syncing Canvas events...');
-      const response = await fetch(`http://localhost:3001/api/canvas/sync`, {
+      const response = await fetch(`https://schedu-ai-zocp.onrender.com/api/canvas/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

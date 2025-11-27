@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-const API_BASE_URL = 'http://localhost:3001/api/google-calendar';
+const API_BASE_URL = 'https://schedu-ai-zocp.onrender.com/api/google-calendar';
 
 export function useGoogleCalendar() {
   const { user } = useAuth();
